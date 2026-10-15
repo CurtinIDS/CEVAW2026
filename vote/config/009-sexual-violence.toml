@@ -1,0 +1,29 @@
+[vote]
+column = "sexual_violence"
+columns = ["body"]
+query = "not name.str.lower().str.contains('speaker') and not (interject == '1')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you are to determine if a particular text matches the given topic.
+
+The document is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate.
+
+## Your task
+
+1. Answer 1 if the document is about the sexual violence.
+
+A document is about sexual violence when it discusses any non-consensual sexual act or attempted act, sexual exploitation, or sexual offending, against adults or children, regardless of the relationship between victim and perpetrator. This includes:
+
+- Sexual assault: Text discusses rape or sexual assault (any non-consensual sexual act or attempted act involving physical contact) against adults or children. Covers offence definitions, prosecution, sentencing, victim support, prevalence, and specific cases.
+- Child sexual offences: Text discusses non-contact sexual offending against children, including grooming, indecent exposure or acts towards children, and child sexual abuse or exploitation material (production, possession, distribution, online exploitation).
+- Sexual exploitation and trafficking: Text discusses sexual servitude, trafficking for sexual exploitation, forced prostitution, or deceptive recruitment for sexual services.
+- Consent and sexual offence law: Text discusses how sexual consent is defined or proven, or reforms to sexual offence law, evidence rules, or court processes for sexual offences (for example affirmative consent, jury directions, limitation periods, treatment of complainants in court).
+
+2. For all other cases, answer 0.
+
+3. Do not rely on your own notions of sexual violence. Strictly adhere to the definition given.
+
+4. A topic only applies if the text _substantively_ discusses it. It does not apply if it is mentioned briefly, parenthetically, or only in passing.
+'''

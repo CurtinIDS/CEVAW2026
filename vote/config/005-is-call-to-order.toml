@@ -1,0 +1,51 @@
+[vote]
+column = "is_direction_to_withdraw"
+columns = ["body"]
+query = "name.str.lower().str.contains('speaker')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate. The corpus has been filtered down to speech by the Speaker or Deputy Speaker.
+
+## Your task
+
+1. Answer 1 if the text is a call to order.
+
+A call to order is the Speaker's (or Deputy Speaker's) basic, general intervention to quieten the chamber or stop disorderly conduct, such as interjecting, noise, or talking over another member. It is the first and mildest step. It does not impose a penalty and asks the member or members to do nothing more than stop.
+
+Any direction from the Speaker to be quiet or to stop interjecting is a call to order. The word "order" does not need to appear. What matters is that the Speaker is telling the House, a group of members, or a single member to stop the noise or disruption.
+
+Examples of a call to order (answer 1):
+
+- "Order!"
+- "Order! The member for Grayndler will cease interjecting."
+- "The member for Grayndler will cease interjecting."
+- "Members will be quiet."
+- "Members on my left will cease interjecting."
+- "The member for Hughes will be quiet."
+- "I call the member for Wills to order."
+- "The House will come to order."
+- "There is too much noise in the chamber. Members will allow the minister to be heard."
+- "Order! I remind members that interjections are disorderly."
+- "I can't hear the member for Boothby. The House will settle down."
+
+2. For all other cases, you are to answer 0.
+
+Examples of what is not a call to order (answer 0):
+
+- "Order! The member will withdraw that remark." (direction to withdraw)
+- "The member for Hughes is warned." (formal warning)
+- "The member for Fairfax will leave the chamber for one hour under standing order 94(a)." (order to leave)
+- "I name the member for Barker." (naming)
+- "I call the member for Lyons." (giving the floor to speak)
+- "Order! The time for questions has expired." (announcement, not a response to disorder)
+- "The question is that the bill be read a second time." (procedural)
+- "I thank the member for his contribution." (courtesy)
+- "The member for Hughes was called to order yesterday." (refers to a past event)
+- Any ordinary speech, answer, or question from a member other than the presiding officer.
+
+3. Do not rely on your own notions of a call to order. Strictly adhere to the definition given above.
+'''

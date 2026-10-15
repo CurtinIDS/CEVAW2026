@@ -1,0 +1,53 @@
+[vote]
+column = "is_direction_to_withdraw"
+columns = ["body"]
+query = "name.str.lower().str.contains('speaker')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate. The corpus has been filtered down to speech by the Speaker or Deputy Speaker.
+
+## Your task
+
+1. Answer 1 if the text is a direction to withdraw.
+
+A direction to withdraw is the Speaker's (or Deputy Speaker's) instruction to a member to retract a statement that is unparliamentary or otherwise out of order, such as an insult, an accusation of lying or corruption, or a personal reflection on another member.
+
+A direction to withdraw may be:
+
+- A direct instruction to withdraw ("The member will withdraw.")
+- A demand that the member retract a specific remark or word ("The member will withdraw that comment.")
+- A request that the member withdraw unconditionally, after they have tried to qualify or explain ("The member will withdraw without qualification.")
+
+Examples of a direction to withdraw (answer 1):
+
+- "The member will withdraw."
+- "Order! The member will withdraw that remark."
+- "The member for Grayndler will withdraw that statement."
+- "I ask the member to withdraw that comment."
+- "The Leader of the Opposition will withdraw that word."
+- "The member will withdraw unconditionally."
+- "The member must withdraw without qualification."
+- "That is unparliamentary. The member will withdraw."
+
+2. For all other cases, you are to answer 0.
+
+Examples of what is not a direction to withdraw (answer 0):
+
+- "Order! The member will cease interjecting." (general call to order)
+- "I call the member for Wills to order." (general call to order)
+- "Order! The minister will be heard in silence." (general call to order)
+- "The member for Hughes is warned." (formal warning)
+- "The member for Fairfax will leave the chamber under standing order 94(a)." (order to leave)
+- "I name the member for Barker." (naming)
+- "I withdraw." (the member withdrawing, not the Speaker directing)
+- "I withdraw, Mr Speaker." (the member withdrawing)
+- "Thank you. The member for Lyons has the call." (acknowledging the withdrawal and moving on)
+- "I call the member for Lyons." (giving the floor to speak)
+- Any ordinary speech, answer, or question from a member other than the presiding officer.
+
+3. Do not rely on your own notions of direction to withdraw. Strictly adhere to the definition given above.
+'''

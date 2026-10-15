@@ -1,0 +1,47 @@
+[vote]
+column = "is_warning"
+columns = ["body"]
+query = "name.str.lower().str.contains('speaker')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate. The corpus has been filtered down to speech by the Speaker or Deputy Speaker.
+
+## Your task
+
+1. Answer 1 if the text is a formal warning against a member.
+
+A formal warning is the Speaker's (or Deputy Speaker's) statement that a member has been warned for disorderly conduct, usually after one or more earlier calls to order. It signals that further disorder will lead to stronger action, such as being ordered to leave the chamber. In the House of Representatives it is commonly linked to standing order 94(a). The warning is directed at a specific member or group of members, and it uses the word "warn" or "warned".
+
+Examples of a warning (answer 1):
+
+- "The member for Hughes is warned."
+- "I warn the member for Hughes."
+- "The member for Grayndler is warned."
+- "I warn the member under standing order 94(a)."
+- "Order! The member for Wills is warned."
+- "I warn members on my left."
+- "The Leader of the Opposition is warned."
+- "I have already called the member to order. He is now warned."
+- "This is the final warning. The member is warned."
+
+2. For all other cases, you are to answer 0.
+
+Examples of what is not a warning (answer 0):
+
+- "Order! The member will cease interjecting." (general call to order)
+- "I call the member for Wills to order." (general call to order)
+- "Order! I remind members that interjections are disorderly." (reminder, no one is warned)
+- "The member will withdraw that remark." (direction to withdraw)
+- "The member for Fairfax will leave the chamber under standing order 94(a)." (order to leave)
+- "I name the member for Barker." (naming)
+- "The member for Hughes has been warned before." (refers to a past warning, not issuing one)
+- "I call the member for Lyons." (giving the floor to speak)
+- "I thank the member for his contribution." (courtesy)
+- Any ordinary speech, answer, or question from a member other than the presiding officer.
+
+3. Do not rely on your own notions of direction a warning. Strictly adhere to the definition given above.
+'''

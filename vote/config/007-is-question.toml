@@ -1,0 +1,51 @@
+[vote]
+column = "is_question"
+columns = ["body"]
+query = "not name.str.lower().str.contains('speaker') and not (interject == '1')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate.
+
+## Your task
+
+1. Answer 1 if the text is a formal question to another member.
+
+A question is a formal parliamentary question put by a member of the House to a minister (or occasionally another office holder), most often during question time. A formal question is recognised by its formulaic opening, which identifies who it is directed to. It is usually delivered after the Speaker has given the member the call. It is not a casual or rhetorical question.
+
+Examples of the start of a formal question (answer 1):
+
+- "My question is to the Prime Minister. Will the Prime Minister confirm that electricity prices have risen under his government?"
+- "My question is to the Treasurer. Treasurer, yesterday you told the House that the budget was on track. Can you explain why the deficit has increased?"
+- "Mr Speaker, my question is to the Minister for Health. Will the minister update the House on the government's investment in primary care?"
+- "My question is addressed to the Minister for Defence. What is the government doing to support veterans?"
+- "My question is to the Minister for Home Affairs." (opening alone is enough)
+- "I ask the Minister for Education: how many new school places have been funded this year?"
+- "I have a supplementary question to the Prime Minister. Is he aware of the concerns of the industry?"
+- "My question is to the Prime Minister, and it follows his answer to the previous question."
+- "I ask the Minister for Finance: (1) How many contractors were engaged in 2023? (2) What was the total cost?"
+
+2. For all other cases, you are to answer 0.
+
+Examples of what are not formal questions (answer 0):
+
+- "Where's the money?" (interjection)
+- "What about the budget?" (interjection)
+- "Who told you that?" (interjection)
+- "And who will pay for this? Ordinary Australians will pay." (rhetorical question in a speech)
+- "Will the member give way?" (request to interrupt)
+- "Will the member take a question?" (request for permission, not the question itself)
+- "Does the member seek leave?" (Speaker's procedural question)
+- "Is the member rising on a point of order?" (Speaker allowing a point of order)
+- "The question is that the bill be read a second time." (Speaker putting a motion)
+- "Is the Speaker aware that the answer was not relevant?" (point of order)
+- "Thank you for the question. The honourable member asks about energy prices. Let me tell him..." (a minister's answer)
+- "I call the member for Lyons." (Speaker giving the floor)
+- "Order! The member will cease interjecting." (call to order)
+- Any ordinary speech, bill debate, or statement that contains no formal question.
+
+3. Do not rely on your own notions of a question. Strictly adhere to the definition given above.
+'''

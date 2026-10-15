@@ -1,0 +1,50 @@
+[vote]
+column = "is_direction_to_withdraw"
+columns = ["body"]
+query = "name.str.lower().str.contains('speaker')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate. The corpus has been filtered down to speech by the Speaker or Deputy Speaker.
+
+## Your task
+
+1. Answer 1 if the text either names or suspends a member.
+
+Naming and suspension is the most serious disciplinary step available to the Speaker (or Deputy Speaker). It begins when the Speaker names a member, meaning formally reports that the member has disregarded the authority of the Chair or has persistently and wilfully obstructed the business of the House. Naming is followed by a motion that the member be suspended from the service of the House. The House decides this motion by a vote, and if it passes, the member is excluded for a set number of sitting days rather than an hour. Naming and suspension are one process, so a text counts if it contains any part of it: the naming, the motion, the putting of the question, or the declaration that the member is suspended.
+
+Examples of naming or suspension (answer 1):
+
+- "I name the member for Barker."
+- "I name the member for Fairfax."
+- "The member for Hughes has defied the Chair. I name him."
+- "I move that the member for Barker be suspended from the service of the House."
+- "The question is that the member for Barker be suspended from the service of the House."
+- "The member for Barker is suspended from the service of the House."
+- "The member for Grayndler is suspended for 24 hours."
+- "The member for Wills has been named. The member is suspended from the service of the House."
+- "Having been named, the member will leave the chamber for the period of his suspension."
+
+2. For all other cases, you are to answer 0.
+
+Examples of what is not naming or suspension (answer 0):
+
+- "The member for Fairfax will leave the chamber for one hour under standing order 94(a)." (order to leave)
+- "I order the member for Hughes to leave the chamber." (order to leave)
+- "The member for Hughes is warned." (formal warning)
+- "I warn the member under standing order 94(a)." (formal warning)
+- "The member will withdraw that remark." (direction to withdraw)
+- "Order! The member will cease interjecting." (general call to order)
+- "I call the member for Wills to order." (general call to order)
+- "If this continues, I will have to name the member." (a threat, no one has been named)
+- "The member for Barker was suspended last week." (refers to a past event)
+- "The member for Barker has returned after his suspension." (procedural remark)
+- "I call the member for Lyons." (giving the floor to speak)
+- "I thank the member for his contribution." (courtesy)
+- Any ordinary speech, answer, or question from a member other than the presiding officer.
+
+3. Do not rely on your own notions of naming or suspension. Strictly adhere to the definition given above.
+'''

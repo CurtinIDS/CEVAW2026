@@ -1,0 +1,24 @@
+[vote]
+column = "dv"
+columns = ["body"]
+query = "not name.str.lower().str.contains('speaker') and not (interject == '1')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you are to determine if a particular text matches the given topic.
+
+The document is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate.
+
+## Your task
+
+1. Answer 1 if the document is about the domestic violence, defined as the following:
+
+> Discussing abusive behaviour — physical, sexual, emotional, psychological, verbal, or financial — occurring within an intimate partner relationship or family/household setting; violence or abusive behaviour outside of this context does not count. This includes debate on legislation, funding, or policy responses to domestic or family violence; statistics or reports on its prevalence; personal testimony, case examples, or condolence motions involving victims, survivors, or perpetrators; and references to support services, refuges, protection orders, or the justice system's handling of such cases.
+
+2. For all other cases, answer 0.
+
+3. Do not rely on your own notions of domestic violence. Strictly adhere to the definition given.
+
+4. A topic only applies if the text _substantively_ discusses it. It does not apply if it is mentioned briefly, parenthetically, or only in passing.
+'''

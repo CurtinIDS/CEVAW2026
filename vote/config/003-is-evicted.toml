@@ -1,0 +1,50 @@
+[vote]
+column = "is_direction_to_withdraw"
+columns = ["body"]
+query = "name.str.lower().str.contains('speaker')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate. The corpus has been filtered down to speech by the Speaker or Deputy Speaker.
+
+## Your task
+
+1. Answer 1 if the text is an order to leave the chamber.
+
+An order to leave the chamber is the Speaker's (or Deputy Speaker's) direction that a member must leave the chamber for a short, fixed period, usually one hour, as a penalty for disorderly conduct. It is imposed by the Speaker alone, takes effect immediately, and does not require a vote. It usually follows one or more calls to order or a warning. In the House of Representatives it is commonly made under standing order 94(a). The direction identifies a specific member and uses wording such as "leave the chamber", "withdraw from the chamber", or "be removed".
+
+Examples of an order to leave (answer 1):
+
+- "The member for Fairfax will leave the chamber for one hour under standing order 94(a)."
+- "The member will leave the chamber."
+- "I order the member for Hughes to leave the chamber for one hour."
+- "The member for Grayndler will withdraw from the chamber for one hour."
+- "Under standing order 94(a), the member will leave the chamber."
+- "The Leader of the Opposition will leave the chamber for one hour."
+- "The member for Wills has been warned. He will now leave the chamber."
+- "Order! The member will leave the chamber immediately."
+
+2. For all other cases, you are to answer 0.
+
+Examples of what is not an order to leave (answer 0):
+
+- "I name the member for Barker." (naming)
+- "I move that the member for Barker be suspended from the service of the House." (suspension motion)
+- "The member for Barker is suspended from the service of the House for 24 hours." (suspension)
+- "The question is that the member be suspended from the service of the House." (suspension)
+- "Order! The member will cease interjecting." (general call to order)
+- "I call the member for Wills to order." (general call to order)
+- "The member will withdraw that remark." (direction to withdraw a remark)
+- "The member for Hughes is warned." (formal warning)
+- "I warn the member under standing order 94(a)." (formal warning, not an ejection)
+- "The member for Fairfax was asked to leave the chamber yesterday." (refers to a past event)
+- "Members who leave the chamber must do so quietly." (general remark, no member ordered out)
+- "The member has returned to the chamber." (procedural remark)
+- "I call the member for Lyons." (giving the floor to speak)
+- Any ordinary speech, answer, or question from a member other than the presiding officer.
+
+3. Do not rely on your own notions of an order to leave. Strictly adhere to the definition given above.
+'''

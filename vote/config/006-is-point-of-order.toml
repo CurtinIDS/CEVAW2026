@@ -1,0 +1,49 @@
+[vote]
+column = "is_point_of_order"
+columns = ["body"]
+query = "name.str.lower().str.contains('speaker')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate. The corpus has been filtered down to speech by the Speaker or Deputy Speaker.
+
+## Your task
+
+1. Answer 1 if the text is allowing a point of order to be raised.
+
+A point of order is when a member interrupts proceedings to claim that the standing orders or the rules of debate have been breached, for example that an answer is not relevant, that a remark is unparliamentary, or that a member is being misrepresented. Only the Speaker (or Deputy Speaker) can recognise the member and let them proceed. Allowing a point of order is the Speaker's act of giving a member the opportunity to raise it. It is not a ruling on the point itself, and it does not mean the Speaker agrees with it.
+
+Examples of allowing a point of order (answer 1):
+
+- "Is the member rising on a point of order?"
+- "The member for Grayndler on a point of order."
+- "The Manager of Opposition Business on a point of order."
+- "Does the member have a point of order?"
+- "What is the point of order?"
+- "The member will state his point of order."
+- "I will hear the point of order."
+- "The member for Wills on a point of order on relevance."
+- "Order! The minister will resume his seat. The Leader of the House on a point of order."
+
+2. For all other cases, you are to answer 0.
+
+Examples of what is not allowing a point of order (answer 0):
+
+- "There is no point of order." (ruling)
+- "I uphold the point of order. The minister will return to the question." (ruling)
+- "The minister is being relevant. The minister has the call." (ruling)
+- "I will not take a point of order during the answer." (refusing)
+- "I will take the point of order at the end of question time." (deferring)
+- "I call the member for Lyons." (giving the floor to speak)
+- "Order! The member will cease interjecting." (general call to order)
+- "The member will withdraw that remark." (direction to withdraw)
+- "The member for Hughes is warned." (formal warning)
+- "I rise on a point of order, Mr Speaker." (the member speaking)
+- "I thank the member for his contribution." (courtesy)
+- Any ordinary speech, answer, or question from a member other than the presiding officer.
+
+3. Do not rely on your own notions of a call to order. Strictly adhere to the definition given above.
+'''

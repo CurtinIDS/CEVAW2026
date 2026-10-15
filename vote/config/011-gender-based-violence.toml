@@ -1,0 +1,37 @@
+[vote]
+column = "gender_violence"
+columns = ["body"]
+query = "not name.str.lower().str.contains('speaker') and not (interject == '1')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you are to determine if a particular text matches the given topic.
+
+The document is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate.
+
+## Your task
+
+1. Answer 1 if the document is about the gender-based violence.
+
+A document is about gender-based violence if it discusses violence directed at a person _because_ of their gender, sex, sexuality, or gender identity, or violence that affects one gender disproportionately. The text must make the link that gender/sexuality/gender/sex is a determining factor, either explicitly or implicitly. Covers violence against women, gendered drivers of violence, violence against LGBTIQ+ people, and harmful practices such as female genital mutilation, forced marriage, dowry abuse, and trafficking for sexual exploitation.
+
+Examples to answer 1:
+
+- "Every day in this country, a woman suffers intimate partner violence."
+- "Transexual people are overrepresented in suicide statistics; it it time we stepped up to reduce this."
+- "There has been a spate of violence against gay men in Sydney using dating apps as bait."
+- "A woman was killed in Sydney yesterday, adding to the grim statistic of violence against women in this country."
+
+2. For all other cases, answer 0.
+
+Examples to answer 0:
+
+- "A woman was killed in Sydney yesterday". (A single instance without framing gender as a determining factor.)
+- "Police violently attacked customers at a gay bar in Melbourne." (A single instance with no explicit link to wider violence against LGBTQ by police.)
+- All other unrelated topics.
+
+3. Do not rely on your own notions of gender-based violence. Strictly adhere to the definition given.
+
+4. A topic only applies if the text _substantively_ discusses it. It does not apply if it is mentioned briefly, parenthetically, or only in passing.
+'''

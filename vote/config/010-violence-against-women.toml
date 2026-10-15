@@ -1,0 +1,26 @@
+[vote]
+column = "violence_against_women"
+columns = ["body"]
+query = "not name.str.lower().str.contains('speaker') and not (interject == '1')"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you are to determine if a particular text matches the given topic.
+
+The document is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate.
+
+## Your task
+
+1. Answer 1 if the document is about the violence against women.
+
+A document is about violence against women if it discusses violence of any kind (domestic, sexual, physical, online, or homicide) and explicitly frames the victims as women and/or girls. Covers national plans and strategies on women's safety, femicide, and women-specific services or prevention campaigns.
+
+Discussion of domestic or sexual violence framed in gender-neutral terms does not qualify.
+
+2. For all other cases, answer 0.
+
+3. Do not rely on your own notions of violence against women. Strictly adhere to the definition given.
+
+4. A topic only applies if the text _substantively_ discusses it. It does not apply if it is mentioned briefly, parenthetically, or only in passing.
+'''
