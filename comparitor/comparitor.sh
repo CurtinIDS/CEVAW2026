@@ -17,7 +17,7 @@ trap cleanup EXIT
 # --- Launch comparitor jobs: N per device, all running concurrently ---
 for n in $(seq 0 $(($NPROCESSES - 1))); do
     CUDA_VISIBLE_DEVICES="${n}" PYTHONUNBUFFERED=1 uv run comparitor.py compare --rater llm --prompt prompts/emotionality.md \
-        /mnt/data/cevaw/corpus_1998_to_2025_v8-2500.parquet 2>&1 \
+        /mnt/data/cevaw/corpus_1998_to_2025_v8.parquet 2>&1 \
         | tee >( { head -n 1000 > "comparitor_${n}.log"; cat > /dev/null; } ) \
         | tail -n 1000 >> "comparitor_${n}.log" &
     COMPARITOR_PIDS+=($!)

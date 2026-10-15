@@ -60,6 +60,7 @@ WINNER_TO_RESULT = {"A": "a", "B": "b", "TIE": "tie"}
 def load_corpus(path):
     """Load a list of {"id", "text"} dicts from a JSON or CSV file."""
     df = pd.read_parquet(path)
+    df = df.query("not name.str.lower().str.contains('speaker')")
     print(f"Loaded {len(df)} rows of text")
     return [{"id": row.Index, "text": row.body} for row in df.itertuples()]
 
@@ -263,15 +264,14 @@ def bootstrap_errors(excerpts, comparisons, n_boot):
         list(fit_scores(excerpt_ids, comparisons).values())
     )  # warm-start reference
 
-
     thetas = np.empty((n_boot, len(source_ids)))
     for b in range(n_boot):
         sample = [comparisons[i] for i in rng.integers(0, m, size=m)]
-        excerpt_scores = fit_scores(excerpt_ids, sample, warm_start=base_pi, tolerance=5e-2)
-        source_scores = aggregate_to_sources(excerpts, excerpt_scores)
-        thetas[b] = list(
-            source_scores.values()
+        excerpt_scores = fit_scores(
+            excerpt_ids, sample, warm_start=base_pi, tolerance=5e-2
         )
+        source_scores = aggregate_to_sources(excerpts, excerpt_scores)
+        thetas[b] = list(source_scores.values())
 
     return dict(zip(source_ids, thetas.std(axis=0)))
 
@@ -493,13 +493,6 @@ def run_scores(args):
         f"\nExcerpt comparisons (min|median|max|total): {min(counts.values())} | {np.median(list(counts.values()))} | {max(counts.values())} | {2 * len(comparisons)}/{len(excerpts)} (x{2 * len(comparisons) / len(excerpts):.1f})"
     )
 
-    print({
-        key: int(value) for key, value in
-        enumerate(
-            np.bincount(list(counts.values()))
-        )
-    })
-
     print(
         f"\nScale separation reliability: {reliability(excerpt_ids, comparisons, pi=excerpt_scores):.2f} "
         "(rule of thumb: >0.7 reliable, >0.9 diminishing returns)"
@@ -513,11 +506,20 @@ def run_scores(args):
     )
 
     source_scores = {sid: (score, errors[sid]) for sid, score in source_scores.items()}
-    print(source_scores)
 
     filename = Path(args.corpus).with_suffix("").with_suffix(".scores.pkl")
     with open(filename, "wb") as f:
         pickle.dump(source_scores, f)
+
+    if args.colname:
+        df = pd.read_parquet(args.corpus)
+        df.loc[list(source_scores.keys()), args.colname] = [
+            val for val, _ in source_scores.values()
+        ]
+        df.loc[list(source_scores.keys()), args.colname + "_error"] = [
+            err for _, err in source_scores.values()
+        ]
+        df.to_parquet(args.corpus)
 
 
 def run_reset(args):
@@ -569,6 +571,7 @@ def main():
 
     p = sub.add_parser("scores", help="print current per-text emotional scores")
     p.add_argument("corpus")
+    p.add_argument("--colname", help="The column name to write results to")
     p.set_defaults(func=run_scores)
 
     p = sub.add_parser("reset", help="delete the logged comparisons for a corpus")

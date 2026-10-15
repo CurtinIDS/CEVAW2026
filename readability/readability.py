@@ -1,14 +1,14 @@
-from concurrent.futures import ProcessPoolExecutor
 import functools
 import math
 import re
 import unicodedata
+from argparse import ArgumentParser
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import pandas as pd
 import pronouncing
 import pysbd
-
 
 # Abbreviations that pysbd's built-in English rules don't cover but that
 # occur constantly in Hansard. Extend this list against your own corpus --
@@ -204,10 +204,10 @@ def dale_chall(text):
 
 
 TESTS = {
-    "flesch_reading_ease": flesch_reading_ease,
-    "flesch_kincaid": flesch_kincaid,
-    "gunning_fog": gunning_fog,
-    "smog": smog,
+    "readability_flesch_reading_ease": flesch_reading_ease,
+    "readability_flesch_kincaid": flesch_kincaid,
+    "readability_gunning_fog": gunning_fog,
+    "readability_smog": smog,
 }
 
 
@@ -216,9 +216,11 @@ def score_row(body):
 
 
 if __name__ == "__main__":
-    df = pd.read_parquet("/mnt/data/cevaw/corpus_1998_to_2025_v8.parquet")
-    # for name in TESTS.keys():
-    #     df[name] = np.nan
+    parser = ArgumentParser()
+    parser.add_argument("parquet")
+    args = parser.parse_args()
+
+    df = pd.read_parquet(args.parquet)
 
     with ProcessPoolExecutor() as pool:
         results = list(pool.map(score_row, df["body"]))
@@ -228,4 +230,4 @@ if __name__ == "__main__":
 
     print(df)
 
-    df.to_parquet("/mnt/data/cevaw/corpus_1998_to_2025_v8-READABILITY.parquet")
+    df.to_parquet(args.parquet)
