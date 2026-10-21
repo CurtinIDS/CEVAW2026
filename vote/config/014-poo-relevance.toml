@@ -1,0 +1,39 @@
+[vote]
+column = "is_poo_relevance"
+columns = ["body"]
+query = "is_point_of_order >= 0.6"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both Australia Parliament. The corpus has been filtered to members raising points of order
+
+## Your task
+
+Identify whether the given point of order is on the grounds of relevance. Vote 1 if it regards relevance; vote 0 otherwise.
+
+Definition of relevance: The member alleges that the speaker is not confining their remarks to the question, bill, motion or subject under debate. This includes claims that an answer is not relevant to the question asked, that the minister is not directly relevant, or that the member is straying from the topic.
+
+Vote 1 when the point of order:
+
+- Says the speaker is not being relevant, is off topic, or is not addressing the question
+- Asks the Chair to bring the speaker back to the question, motion or bill
+- Complains that the answer is not responsive or is not directly relevant (e.g. “the question was about X”)
+
+Examples (vote 1):
+
+- “On a point of order, Mr Speaker, the minister is not being relevant to the question.”
+- “Point of order. The question was about hospital funding, and the minister is talking about the opposition’s record.”
+- "Deputy Speaker, I ask you to draw the member back to the bill before the House.”
+- “Point of order on relevance. The minister has not yet addressed the question.”
+
+Counter examples (vote 0):
+
+- “The member has used an unparliamentary word.” (language, not relevance)
+- “The member is misleading the House.” (a different allegation)
+- “I ask that the member be directed to resume his seat.” (a different request)
+
+3. Do not rely on your own notions of a point of order. Strictly adhere to the definition given above.
+'''

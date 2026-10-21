@@ -1,0 +1,41 @@
+[vote]
+column = "is_poo_withdraw"
+columns = ["body"]
+query = "is_point_of_order >= 0.6"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both Australia Parliament. The corpus has been filtered to members raising points of order
+
+## Your task
+
+Identify whether the given point of order asks a member to withdraw. Vote 1 if it requests a member to withdraw; vote 0 otherwise.
+
+Definition: The member asks the Chair to require another member to withdraw words, a remark, or an allegation, or asks that a member retract and/or apologise. The key element is the explicit request that something be withdrawn.
+
+Vote YES when the point of order:
+
+- Uses “withdraw” (or “retract”, “apologise”) as a request or demand directed to the Speaker, or demands that the member do so
+- Asks the Speaker to direct a member to withdraw a statement or word
+
+Examples (vote 1):
+
+- “Point of order, Mr Speaker. I ask that the member withdraw that comment.”
+- “On a point of order, the word ‘liar’ is unparliamentary and should be withdrawn.”
+- “Deputy Spekaer, I ask the member to withdraw and apologise.”
+- “Point of order. The minister should be required to withdraw that imputation.”
+
+Counter examples (vote 0):
+
+- “The member has used unparliamentary language.” (no request to withdraw)
+- “The minister is not being relevant.” (relevance only)
+- “The member withdrew the comment earlier.” (describes a past withdrawal, no request)
+- “I withdraw.” or “I will withdraw the remark, Mr Speaker.” (the speaker withdrawing, not a request that someone else be made to)
+- “I move that the motion be withdrawn.” (withdrawing a motion, not words)
+- “The Chair should ask the member to resume his seat.” (a different direction)
+
+3. Do not rely on your own notions of a point of order. Strictly adhere to the definition given above.
+'''

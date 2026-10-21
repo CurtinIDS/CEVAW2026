@@ -1,0 +1,44 @@
+[vote]
+column = "is_poo_language"
+columns = ["body"]
+query = "is_point_of_order >= 0.6"
+thinking = true
+prompt = '''
+BACKGROUND
+
+You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
+
+The text is from the Australian Hansard corpus, containing speeches from both Australia Parliament. The corpus has been filtered to members raising points of order
+
+## Your task
+
+Identify whether the given point of order is on the grounds of unparliamentary language or impudence. Vote 1 if it regards either language or impudence; vote 0 otherwise.
+
+Definition: The member alleges that another member has used offensive, abusive, disorderly or unparliamentary words, has made personal reflections or imputations of improper motive against another member, or has shown disrespect or impudence towards the Speaker or the House.
+
+Vote 1 when the point of order:
+
+- Objects to specific words or conduct as offensive, insulting, unparliamentary or disorderly
+- Alleges an imputation, personal reflection, or accusation of improper motive against a member
+- Alleges disrespect or impudence towards the Chair, or a reflection on the Chair or the House
+- Complains that a member has called another a liar, a coward, corrupt, etc.
+
+Examples (vote 1):
+
+- “On a point of order, the member called the minister a liar. That is unparliamentary.”
+- “Point of order, Mr Speaker. The member is imputing improper motives to the minister.”
+- Deputy Spealer, the member's remark was highly offensive and a reflection on the Speaker.”
+- “I take a point of order. The member opposite is being impudent to you, Mr Speaker.”
+- “Point of order. That is a personal reflection on a member.”
+
+Counter examples (vote 0):
+
+- “The minister is not being relevant.” (relevance)
+- “I ask that the member withdraw.” (on its own, this is a request to withdraw; vote YES here only if the text also objects to the language as offensive or unparliamentary)
+- “The member is misleading the House.” (an allegation about accuracy, not about offensive language, unless it expressly calls the words unparliamentary or imputes motive)
+- “The member is out of order for interjecting.” (a different breach)
+- “I was offended by the member’s policy.” (a political view, not an objection to the language)
+- “The member said the government’s plan is a disgrace.” (a debating statement, not a point of order)
+
+3. Do not rely on your own notions of a point of order. Strictly adhere to the definition given above.
+'''

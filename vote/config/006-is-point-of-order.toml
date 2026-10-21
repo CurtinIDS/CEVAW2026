@@ -1,49 +1,52 @@
 [vote]
 column = "is_point_of_order"
 columns = ["body"]
-query = "name.str.lower().str.contains('speaker')"
+query = "not name.str.lower().str.contains('speaker')"
 thinking = true
 prompt = '''
 BACKGROUND
 
 You are a text classifier: you will be given a text and will be asked to determine if it matches a given criteria.
 
-The text is from the Australian Hansard corpus, containing speeches from both the Australia Parliament and Senate. The corpus has been filtered down to speech by the Speaker or Deputy Speaker.
+The text is from the Australian Hansard corpus, containing speeches from both Australia Parliament. The corpus has been filtered to speeches made by members of the house and excludes the Speaker.
 
 ## Your task
 
-1. Answer 1 if the text is allowing a point of order to be raised.
+Identify whether the given text is rasing a point of order.
 
-A point of order is when a member interrupts proceedings to claim that the standing orders or the rules of debate have been breached, for example that an answer is not relevant, that a remark is unparliamentary, or that a member is being misrepresented. Only the Speaker (or Deputy Speaker) can recognise the member and let them proceed. Allowing a point of order is the Speaker's act of giving a member the opportunity to raise it. It is not a ruling on the point itself, and it does not mean the Speaker agrees with it.
+A point of order is raised when a member interrupts proceedings to draw the Speaker’s attention to an alleged breach of the Standing Orders, rules of debate, or parliamentary practice, and asks for a ruling. It is a procedural objection, not a contribution to the debate itself.
 
-Examples of allowing a point of order (answer 1):
+Key features (a text is a point of order if it):
 
-- "Is the member rising on a point of order?"
-- "The member for Grayndler on a point of order."
-- "The Manager of Opposition Business on a point of order."
-- "Does the member have a point of order?"
-- "What is the point of order?"
-- "The member will state his point of order."
-- "I will hear the point of order."
-- "The member for Wills on a point of order on relevance."
-- "Order! The minister will resume his seat. The Leader of the House on a point of order."
+- Is introduced by or clearly signals “point of order”, or is an interjected procedural objection directed to the Chair
+- Alleges a specific rule breach, such as relevance, imputations or offensive words, unparliamentary language, misleading the House, tedious repetition, a member speaking out of turn, a breach of the sessional orders, or a quorum issue
+- Often cites a standing order number or asks the Chair to direct a member (e.g. to withdraw, be relevant, or resume their seat)
+- Is addressed to the Chair (“Mr Speaker”, “Madam Deputy President”), not to other members
 
-2. For all other cases, you are to answer 0.
+Examples of points of order (answer 1):
 
-Examples of what is not allowing a point of order (answer 0):
+- “Mr SPEAKER, on a point of order, the member is not being relevant to the question.”
+- “Point of order, Madam Deputy President. The minister is reflecting on a vote of the House.”
+- “On a point of order under standing order 64, the member has used an unparliamentary word and should withdraw.”
+- “I raise a point of order. The member for Grayndler is misleading the House.”
+- “A point of order, Mr Deputy Speaker: the member is debating the question.”
 
-- "There is no point of order." (ruling)
-- "I uphold the point of order. The minister will return to the question." (ruling)
-- "The minister is being relevant. The minister has the call." (ruling)
-- "I will not take a point of order during the answer." (refusing)
-- "I will take the point of order at the end of question time." (deferring)
-- "I call the member for Lyons." (giving the floor to speak)
-- "Order! The member will cease interjecting." (general call to order)
-- "The member will withdraw that remark." (direction to withdraw)
-- "The member for Hughes is warned." (formal warning)
-- "I rise on a point of order, Mr Speaker." (the member speaking)
-- "I thank the member for his contribution." (courtesy)
-- Any ordinary speech, answer, or question from a member other than the presiding officer.
+Similar but NOT points of order (answer 0):
 
-3. Do not rely on your own notions of a call to order. Strictly adhere to the definition given above.
+- “I rise to speak on the bill.” (the start of a speech, not a procedural objection)
+- “Mr Speaker, I seek leave to table a document.” (a request for leave, a different procedure)
+- “I move that the question be put.” (a motion)
+- “The member’s claims are completely false.” (a debating point or disagreement, not a rule breach alleged to the Chair)
+- “I seek to make a personal explanation.” (a separate procedure)
+- “Will the minister take an interjection?” or “Will the member give way?” (a request to the speaker, not the Chair)
+- “Is the member aware of the point of order raised earlier?” (merely mentions the term, does not raise one)
+- “Mr Speaker, I ask a supplementary question.” (a question, not an objection)
+- “I thank the Speaker for his ruling on the point of order.” (refers to a past point of order, does not raise one)
+
+Edge-case rules:
+
+- If the text merely references or discusses a point of order without raising one, answer 0 (NO).
+- If a member raises a point of order and then continues with its substance, answer 1 (YES).
+
+3. Do not rely on your own notions of a point of order. Strictly adhere to the definition given above.
 '''
