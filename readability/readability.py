@@ -4,6 +4,7 @@ import re
 import unicodedata
 from argparse import ArgumentParser
 from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -188,7 +189,7 @@ def smog(text):
         return np.nan
 
 
-with open("dale-chall-word-list.txt") as f:
+with open(Path(__file__).parent / "dale-chall-word-list.txt") as f:
     DALE_CHALL_WORD_LIST = [word.strip() for word in f.readlines()]
 
 
@@ -208,6 +209,7 @@ TESTS = {
     "readability_flesch_kincaid": flesch_kincaid,
     "readability_gunning_fog": gunning_fog,
     "readability_smog": smog,
+    "readability_dale_chall": dale_chall,
 }
 
 
