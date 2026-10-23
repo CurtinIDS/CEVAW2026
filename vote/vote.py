@@ -1,4 +1,4 @@
-"""Ask Gemma 4 E4B (vLLM, offline) a yes/no question about every row of a parquet file. Each row is judged
+"""Ask Gemma 4 E4B or Qwen3.8-27B (vLLM, offline) a yes/no question about every row of a parquet file. Each row is judged
 --evals times independently with the prompt given in --prompt. Writes --column (the fraction of evaluations
 that answered 1, from 0 to 1) and <column>_reason (every evaluation's reason, joined with ' | ') back to
 the same parquet file.
@@ -12,7 +12,12 @@ the full prompt, and every other setting, in a file you can store:
     Does the text discuss ...?
     '''
 
-The work is split into batches that --gpus independent vLLM replicas (one per GPU) pull from a shared queue.
+--model picks the LLM: "faster" (the default) is Gemma 4 E4B, "smarter" is Qwen3.8-27B in 4-bit, which fits
+one A100-40GB. Both can think (--thinking), and the thought is stripped from the answer. Qwen's thinking
+effort is set to low.
+
+The work is split into batches of --batch-size documents that --gpus independent vLLM replicas (one per GPU)
+pull from a shared queue.
 Each finished batch is saved to <parquet>.<column>.parts/, so an interrupted or failed run resumes where it
 stopped. The parquet file itself is only rewritten once every batch is done."""
 
@@ -32,13 +37,21 @@ import configargparse
 import numpy as np
 import pandas as pd
 
-MODEL = "google/gemma-4-E4B-it"
+MODELS = {
+    "faster": "google/gemma-4-E4B-it",
+    "smarter": "TelperionAI/Qwen3.8-27B-INT4-AWQ-GPTQ",  # W4A16, 25 GB
+}
+# extra arguments for LLM(): the Qwen model keeps a recurrent-state cache block for every running sequence,
+# and only about 200 fit next to its weights on a 40 GB card
+LLM_ARGS = {"faster": {}, "smarter": {"max_num_seqs": 128}}
+# extra chat template arguments: Qwen's thinking effort (xhigh by default) is only a hint added to the system
+# prompt, not a hard limit, and is ignored when thinking is off
+CHAT_ARGS = {"faster": {}, "smarter": {"reasoning_effort": "low"}}
 MAX_MODEL_LEN = 65536
-BATCH = 500
 MAX_CONSECUTIVE_ERRORS = 5
 HEAD_CHARS, TAIL_CHARS = 12000, 4000  # longer fields keep only their start and end
 MAX_TOKENS = 256  # room for a JSON answer with a one-sentence reason
-MAX_TOKENS_THINKING = 4096  # room for the thought as well
+MAX_TOKENS_THINKING = {"faster": 4096, "smarter": 16384}  # room for the thought as well
 SAMPLE = 5  # documents printed per batch for monitoring
 SNIPPET_CHARS = 500  # head and tail of each column shown for those documents
 
@@ -52,10 +65,11 @@ Example: {"reason": "One short sentence.", "result": 1}
 No other output is allowed: no text before or after the JSON object, no code block, no backticks, no explanation. Any response that is not exactly this JSON object is invalid.
 """
 
-# Removes, in one pass: everything up to the end of Gemma 4's thought block (<|channel>thought ... <channel|>),
-# end-of-turn sentinels, a stray leading "thought" label, and markdown code fences / backticks.
+# Removes, in one pass: everything up to the end of the thought block (Gemma 4: <|channel>thought ... <channel|>;
+# Qwen: ... </think>, as its chat template opens the block in the prompt), end-of-turn sentinels, a stray leading
+# "thought" label, and markdown code fences / backticks.
 CLEAN = re.compile(
-    r"^.*?<channel\|>|<turn\|>|<eos>|^thought\n|```(?:json)?|`",
+    r"^.*?(?:<channel\|>|</think>)|<turn\|>|<eos>|<\|im_end\|>|<\|endoftext\|>|^thought\n|```(?:json)?|`",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -101,7 +115,7 @@ def parse_response(raw):
     return None
 
 
-def evaluate(llm, conversations, sampling, evals, thinking):
+def evaluate(llm, conversations, sampling, evals, template_args):
     votes = [[] for _ in conversations]
     reasons = [[] for _ in conversations]
     # (conversation index, invalid responses in a row) for every evaluation still to do
@@ -110,7 +124,7 @@ def evaluate(llm, conversations, sampling, evals, thinking):
         outputs = llm.chat(
             [conversations[i] for i, _ in pending],
             sampling,
-            chat_template_kwargs={"enable_thinking": thinking},
+            chat_template_kwargs=template_args,
             use_tqdm=False,
         )
         retry = []
@@ -166,21 +180,29 @@ def worker(gpu, args, positions, shown, parts_dir, tasks, results):
     try:
         df = pd.read_parquet(args.parquet, columns=shown).iloc[positions]
         system = system_message(args.prompt)
-        llm = LLM(MODEL, max_model_len=MAX_MODEL_LEN, generation_config="auto")
+        template_args = {"enable_thinking": args.thinking, **CHAT_ARGS[args.model]}
+        llm = LLM(
+            MODELS[args.model],
+            max_model_len=MAX_MODEL_LEN,
+            generation_config="auto",
+            **LLM_ARGS[args.model],
+        )
         # the model's own generation_config.json values, except for the length...
         sampling = llm.get_default_sampling_params()
-        sampling.max_tokens = MAX_TOKENS_THINKING if args.thinking else MAX_TOKENS
+        sampling.max_tokens = (
+            MAX_TOKENS_THINKING[args.model] if args.thinking else MAX_TOKENS
+        )
         # ...and the thought delimiters, which must not be stripped when thinking
         sampling.skip_special_tokens = not args.thinking
 
         while (start := tasks.get()) is not None:
-            batch = df.iloc[start : start + BATCH].to_dict("records")
+            batch = df.iloc[start : start + args.batch_size].to_dict("records")
             conversations = [
                 [system, {"role": "user", "content": format_record(r, shown)}]
                 for r in batch
             ]
             votes, reasons = evaluate(
-                llm, conversations, sampling, args.evals, args.thinking
+                llm, conversations, sampling, args.evals, template_args
             )
             save_part(parts_dir, start, votes, reasons)
             for i in sorted(random.sample(range(len(batch)), min(SAMPLE, len(batch)))):
@@ -284,8 +306,18 @@ def main():
         help="number of GPUs, each running its own model replica",
     )
     parser.add_argument(
-        "--thinking", action="store_true", help="enable Gemma 4 thinking mode"
+        "--batch-size",
+        type=int,
+        default=500,
+        help="documents per batch; each finished batch is saved, so smaller batches give output sooner",
     )
+    parser.add_argument(
+        "--model",
+        choices=MODELS,
+        default="faster",
+        help="faster: Gemma 4 E4B; smarter: Qwen3.8-27B in 4-bit, which fits one A100-40GB",
+    )
+    parser.add_argument("--thinking", action="store_true", help="enable thinking mode")
     parser.add_argument(
         "--query",
         help="a pandas DataFrame.query expression; only the matching rows are judged, the others are left empty",
@@ -295,6 +327,8 @@ def main():
         parser.error("--evals must be at least 1")
     if args.gpus < 1:
         parser.error("--gpus must be at least 1")
+    if args.batch_size < 1:
+        parser.error("--batch-size must be at least 1")
     if not args.prompt.strip():
         parser.error("--prompt must not be empty")
     if not Path(args.parquet).is_file():
@@ -323,19 +357,23 @@ def main():
     open_parts_dir(
         parts_dir,
         {
-            "model": MODEL,
+            "model": MODELS[args.model],
             "system": system_message(args.prompt)["content"],
             "columns": shown,
             "query": args.query,
             "evals": args.evals,
             "thinking": args.thinking,
-            "batch": BATCH,
+            "batch": args.batch_size,
             "rows": len(positions),
             "total_rows": len(full),
         },
     )
     done = {int(p.stem) for p in parts_dir.glob("*.parquet")}
-    todo = [start for start in range(0, len(positions), BATCH) if start not in done]
+    todo = [
+        start
+        for start in range(0, len(positions), args.batch_size)
+        if start not in done
+    ]
     print(f"{len(done)} batches already done, {len(todo)} to run", flush=True)
     if todo:
         try:
