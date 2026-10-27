@@ -12,9 +12,9 @@ the full prompt, and every other setting, in a file you can store:
     Does the text discuss ...?
     '''
 
---model picks the LLM: "faster" (the default) is Gemma 4 E4B, "smarter" is Qwen3.8-27B in 4-bit, which fits
-one A100-40GB. Both can think (--thinking), and the thought is stripped from the answer. Qwen's thinking
-effort is set to low.
+--model picks the LLM: "fast" (the default) is Gemma 4 E4B, "balanced" is Gemma 4 26B-A4B in FP8 and
+"accurate" is Qwen3.8-27B in 4-bit, so that they fit one A100-40GB. All can think (--thinking), and the
+thought is stripped from the answer. For "accurate" the thinking effort is set to low.
 
 The work is split into batches of --batch-size documents that --gpus independent vLLM replicas (one per GPU)
 pull from a shared queue.
@@ -31,27 +31,44 @@ import re
 import shutil
 import time
 import traceback
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import configargparse
 import numpy as np
 import pandas as pd
 
+
+@dataclass(frozen=True)
+class Model:
+    name: str
+    max_tokens_thinking: int  # room for the thought as well
+    llm_args: dict = field(default_factory=dict)  # extra arguments for LLM()
+    chat_args: dict = field(default_factory=dict)  # extra chat template arguments
+
+
 MODELS = {
-    "faster": "google/gemma-4-E4B-it",
-    "smarter": "TelperionAI/Qwen3.8-27B-INT4-AWQ-GPTQ",  # W4A16, 25 GB
+    "fast": Model("google/gemma-4-E4B-it", 4096),
+    "balanced": Model(
+        "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",  # about 26 GB
+        8192,
+        # text only, so that no memory is reserved for the vision encoder
+        llm_args={"limit_mm_per_prompt": {"image": 0, "audio": 0}},
+    ),
+    "accurate": Model(
+        "TelperionAI/Qwen3.8-27B-INT4-AWQ-GPTQ",  # W4A16, 25 GB
+        16384,
+        # only about 200 recurrent-state cache blocks fit next to its weights on a 40 GB card
+        llm_args={"max_num_seqs": 128},
+        # the thinking effort (xhigh by default) is only a hint added to the system prompt, not a hard
+        # limit, and is ignored when thinking is off
+        chat_args={"reasoning_effort": "low"},
+    ),
 }
-# extra arguments for LLM(): the Qwen model keeps a recurrent-state cache block for every running sequence,
-# and only about 200 fit next to its weights on a 40 GB card
-LLM_ARGS = {"faster": {}, "smarter": {"max_num_seqs": 128}}
-# extra chat template arguments: Qwen's thinking effort (xhigh by default) is only a hint added to the system
-# prompt, not a hard limit, and is ignored when thinking is off
-CHAT_ARGS = {"faster": {}, "smarter": {"reasoning_effort": "low"}}
 MAX_MODEL_LEN = 65536
 MAX_CONSECUTIVE_ERRORS = 5
 HEAD_CHARS, TAIL_CHARS = 12000, 4000  # longer fields keep only their start and end
 MAX_TOKENS = 256  # room for a JSON answer with a one-sentence reason
-MAX_TOKENS_THINKING = {"faster": 4096, "smarter": 16384}  # room for the thought as well
 SAMPLE = 5  # documents printed per batch for monitoring
 SNIPPET_CHARS = 500  # head and tail of each column shown for those documents
 
@@ -174,24 +191,23 @@ def save_part(parts_dir, start, votes, reasons):
 
 
 def worker(gpu, args, positions, shown, parts_dir, tasks, results):
+    model = MODELS[args.model]
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
     from vllm import LLM  # imported only now, after the GPU has been pinned
 
     try:
         df = pd.read_parquet(args.parquet, columns=shown).iloc[positions]
         system = system_message(args.prompt)
-        template_args = {"enable_thinking": args.thinking, **CHAT_ARGS[args.model]}
+        template_args = {"enable_thinking": args.thinking, **model.chat_args}
         llm = LLM(
-            MODELS[args.model],
+            model.name,
             max_model_len=MAX_MODEL_LEN,
             generation_config="auto",
-            **LLM_ARGS[args.model],
+            **model.llm_args,
         )
         # the model's own generation_config.json values, except for the length...
         sampling = llm.get_default_sampling_params()
-        sampling.max_tokens = (
-            MAX_TOKENS_THINKING[args.model] if args.thinking else MAX_TOKENS
-        )
+        sampling.max_tokens = model.max_tokens_thinking if args.thinking else MAX_TOKENS
         # ...and the thought delimiters, which must not be stripped when thinking
         sampling.skip_special_tokens = not args.thinking
 
@@ -314,8 +330,8 @@ def main():
     parser.add_argument(
         "--model",
         choices=MODELS,
-        default="faster",
-        help="faster: Gemma 4 E4B; smarter: Qwen3.8-27B in 4-bit, which fits one A100-40GB",
+        default="fast",
+        help="fast: Gemma 4 E4B; balanced: Gemma 4 26B-A4B in FP8; accurate: Qwen3.8-27B in 4-bit",
     )
     parser.add_argument("--thinking", action="store_true", help="enable thinking mode")
     parser.add_argument(
@@ -357,7 +373,7 @@ def main():
     open_parts_dir(
         parts_dir,
         {
-            "model": MODELS[args.model],
+            "model": MODELS[args.model].name,
             "system": system_message(args.prompt)["content"],
             "columns": shown,
             "query": args.query,
