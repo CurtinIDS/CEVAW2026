@@ -1,0 +1,116 @@
+[vote]
+column = "sexism_protective_paternalism"
+columns = ["body"]
+query = "maybe_sexist > 0"
+thinking = true
+model = "accurate"
+batch-size = 100
+prompt = '''
+=== TASK ===
+You will read a text from the Australian Parliament's Hansard. It may
+contain speeches, questions, answers and interjections. The text may
+already have been judged to be sexist. Your ONLY job is to decide whether
+it contains one specific, narrow form of sexism: PROTECTIVE PATERNALISM.
+
+=== IMPORTANT ===
+Sexism takes many forms. This task is about PROTECTIVE PATERNALISM ONLY.
+A text can be clearly sexist and still NOT contain PROTECTIVE PATERNALISM.
+- If the text contains PROTECTIVE PATERNALISM, answer 1, even if it is also sexist in
+  other ways.
+- If the text is sexist in some other way but does not contain PROTECTIVE PATERNALISM,
+  answer 0.
+- If the text is not sexist at all, answer 0.
+
+=== BACKGROUND ===
+Sexism toward women can be HOSTILE (openly negative toward women) or
+BENEVOLENT (it sounds kind or flattering, but still treats women as a
+class in a stereotyped way). Benevolent sexism still counts as sexism,
+even when the speaker means well and even when it is used to argue for
+something that helps women. PROTECTIVE PATERNALISM is a form of benevolent sexism.
+
+=== HOW TO DECIDE ===
+1. The statement must be about women as a group ("women are...", "the
+   fairer sex"), or about a particular woman BECAUSE she is a woman.
+2. The speaker must be stating the view as their own. Interjections
+   recorded in Hansard count. If a speaker quotes or reports a sexist
+   remark in order to criticise it, that is not sexism by the speaker.
+3. One qualifying statement is enough. The rest of the text can be
+   neutral.
+4. Ask: does this statement rely on a belief about what women are
+   naturally like, what they can do, or where they belong?
+5. Then check that the statement matches the definition of PROTECTIVE PATERNALISM
+   below. Being sexist is not enough on its own.
+
+=== THESE ARE NOT SEXISM ON THEIR OWN ===
+- Discussing policy that affects women (parental leave, domestic violence
+  services, women's health, the pay gap), or giving statistics about women.
+- Saying that women face discrimination or barriers, or calling for equal
+  treatment.
+- Criticising a female member's policies or performance in the same way a
+  man would be criticised.
+- Opposing a policy such as gender quotas, as long as women are not
+  portrayed as incompetent or as seeking unfair advantage.
+- Thanking or praising a specific woman (wife, mother, colleague) without
+  any claim about women in general.
+- Facts of biology (pregnancy, childbirth, breastfeeding).
+- Formal address such as "Madam Speaker".
+- Negative statements about men (out of scope).
+
+=== DEFINITION: PROTECTIVE PATERNALISM ===
+Women, because they are women, should be protected, provided for,
+shielded, rescued first, or have decisions made for them by men. The tone
+is often chivalrous or affectionate.
+This includes:
+- men's duty to provide for women financially;
+- women being rescued or evacuated first because they are women;
+- keeping women out of jobs, places or public life "for their own good".
+Key test: is the protection owed because the person is a woman (delicate,
+precious, the "weaker sex"), and not because of a specific risk or need
+that the speaker identifies?
+
+=== WORKED EXAMPLES: CONTAINS PROTECTIVE PATERNALISM ===
+Text: "A man's first duty is to provide for his wife, so that she need
+never go out to work."
+Answer: 1
+Why: The man as provider and the woman as dependent.
+
+Text: "I will not vote to send our daughters into combat. Women should be
+shielded from the brutality of war, not thrown into it."
+Answer: 1
+Why: Women kept out of a role for their protection.
+
+Text: "Politics is a rough business, and I would not see the gentler sex
+exposed to its coarseness."
+Answer: 1
+Why: Women shielded from public life.
+
+Text: "In any evacuation the women must be got out first. That is simply
+what decent men do."
+Answer: 1
+Why: Women rescued first because they are women.
+
+=== WORKED EXAMPLES: DOES NOT CONTAIN PROTECTIVE PATERNALISM ===
+(Some of these are sexist, but not in this specific way.)
+
+Text: "Women bring a gentleness and moral sense to public life that men
+lack."
+Answer: 0
+Why: Sexist, but not in this way. It praises a trait. It does not call for
+protecting or providing for women.
+
+Text: "A married woman's wages are properly the concern of her husband, who
+is the head of the household."
+Answer: 0
+Why: Sexist, but not in this way. It is about the husband's authority over
+his wife, not about caring for or shielding her.
+
+Text: "Women are the majority of people killed by a partner, so funding
+for women's refuges is essential."
+Answer: 0
+Why: Protection based on stated evidence of risk. Not sexist.
+
+Text: "This visa stream gives priority to women who have been targeted for
+persecution in their home country."
+Answer: 0
+Why: Priority based on a specific, identified danger. Not sexist.
+'''

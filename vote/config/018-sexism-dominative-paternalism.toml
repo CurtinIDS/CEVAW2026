@@ -1,0 +1,116 @@
+[vote]
+column = "sexism_dominative_paternalism"
+columns = ["body"]
+query = "maybe_sexist > 0"
+thinking = true
+model = "accurate"
+batch-size = 100
+prompt = '''
+=== TASK ===
+You will read a text from the Australian Parliament's Hansard. It may
+contain speeches, questions, answers and interjections. The text may
+already have been judged to be sexist. Your ONLY job is to decide whether
+it contains one specific, narrow form of sexism: DOMINATIVE PATERNALISM.
+
+=== IMPORTANT ===
+Sexism takes many forms. This task is about DOMINATIVE PATERNALISM ONLY.
+A text can be clearly sexist and still NOT contain DOMINATIVE PATERNALISM.
+- If the text contains DOMINATIVE PATERNALISM, answer 1, even if it is also sexist in
+  other ways.
+- If the text is sexist in some other way but does not contain DOMINATIVE PATERNALISM,
+  answer 0.
+- If the text is not sexist at all, answer 0.
+
+=== BACKGROUND ===
+Sexism toward women can be HOSTILE (openly negative toward women) or
+BENEVOLENT (it sounds kind or flattering, but still treats women as a
+class in a stereotyped way). Benevolent sexism still counts as sexism,
+even when the speaker means well and even when it is used to argue for
+something that helps women. DOMINATIVE PATERNALISM is a form of hostile sexism.
+
+=== HOW TO DECIDE ===
+1. The statement must be about women as a group ("women are...", "the
+   fairer sex"), or about a particular woman BECAUSE she is a woman.
+2. The speaker must be stating the view as their own. Interjections
+   recorded in Hansard count. If a speaker quotes or reports a sexist
+   remark in order to criticise it, that is not sexism by the speaker.
+3. One qualifying statement is enough. The rest of the text can be
+   neutral.
+4. Ask: does this statement rely on a belief about what women are
+   naturally like, what they can do, or where they belong?
+5. Then check that the statement matches the definition of DOMINATIVE PATERNALISM
+   below. Being sexist is not enough on its own.
+
+=== THESE ARE NOT SEXISM ON THEIR OWN ===
+- Discussing policy that affects women (parental leave, domestic violence
+  services, women's health, the pay gap), or giving statistics about women.
+- Saying that women face discrimination or barriers, or calling for equal
+  treatment.
+- Criticising a female member's policies or performance in the same way a
+  man would be criticised.
+- Opposing a policy such as gender quotas, as long as women are not
+  portrayed as incompetent or as seeking unfair advantage.
+- Thanking or praising a specific woman (wife, mother, colleague) without
+  any claim about women in general.
+- Facts of biology (pregnancy, childbirth, breastfeeding).
+- Formal address such as "Madam Speaker".
+- Negative statements about men (out of scope).
+
+=== DEFINITION: DOMINATIVE PATERNALISM ===
+Women are treated as not fully competent or rational adults who need men
+to direct, manage or control them. Men should have authority over women,
+and women should defer to men.
+This includes:
+- dismissing a woman as emotional, hysterical or irrational because she is
+  a woman;
+- saying women in general overreact or are too easily offended;
+- saying husbands should control their wives' money, choices or affairs.
+Key test: does the statement say women need men in charge of them, or that
+women cannot think or act as rational adults?
+
+=== WORKED EXAMPLES: CONTAINS DOMINATIVE PATERNALISM ===
+Text: "The member opposite is getting hysterical again. Perhaps one of her
+male colleagues could calm her down and explain the figures to her slowly."
+Answer: 1
+Why: Treats her as irrational and needing a man to manage her.
+
+Text: "A married woman's wages are properly the concern of her husband, who
+is the head of the household."
+Answer: 1
+Why: The husband should control the wife's affairs.
+
+Text: "Women are far too easily offended these days. Every harmless remark
+is treated as an outrage."
+Answer: 1
+Why: Women as a group portrayed as overreacting and irrational.
+
+Text: "The honourable member is clearly too emotional about this to think
+it through. She should leave it to cooler heads on this side."
+Answer: 1
+Why: Dismisses her as emotional and says men should decide instead.
+
+=== WORKED EXAMPLES: DOES NOT CONTAIN DOMINATIVE PATERNALISM ===
+(Some of these are sexist, but not in this specific way.)
+
+Text: "Women simply do not have the head for economics, which is why
+Treasury has always been run by men."
+Answer: 0
+Why: Sexist, but not in this way. It says men are better at a high-status
+job. It does not say women need men to control them.
+
+Text: "I will not vote to send our daughters into combat. Women should be
+shielded from the brutality of war."
+Answer: 0
+Why: Sexist, but not in this way. It is about shielding women, not about
+women being irrational or needing to be controlled.
+
+Text: "The minister's answer was evasive. She should come back to the
+House with the real figures." (The minister is a woman.)
+Answer: 0
+Why: Ordinary criticism of performance, nothing about her sex.
+
+Text: "Women hold only a third of the seats in this chamber, and that
+should concern every one of us."
+Answer: 0
+Why: Recognises under-representation. Not sexist.
+'''

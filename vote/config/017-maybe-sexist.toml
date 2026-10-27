@@ -1,0 +1,161 @@
+[vote]
+column = "maybe_sexist"
+columns = ["body"]
+query = ""
+thinking = true
+model = "balanced"
+prompt = '''
+=== TASK ===
+You will read a text from the Australian Parliament's Hansard. It may
+contain speeches, questions, answers and interjections.
+
+You are a first-pass FILTER. Return a "maybe_sexism" flag:
+- 1 if the text MIGHT contain sexism toward women;
+- 0 only if it clearly does not.
+
+A more careful reviewer will check every text you flag. Missing a sexist
+text is a much worse mistake than flagging a text that turns out to be
+fine. When in doubt, answer 1.
+
+=== ANSWER 1 IF ANY STATEMENT MIGHT DO ANY OF THESE ===
+Count it even if the statement is mild, ambiguous, joking, said in
+passing, said as praise, or meant kindly.
+
+1. Says women need men to manage or control them. Calls women (or a
+   particular woman) emotional, hysterical, irrational or too easily
+   offended. Says wives should defer to husbands.
+2. Says men are better suited to important roles such as politics,
+   leadership, business, the professions or the military, or that women do
+   not belong there. Says women's gains are unfair: special favours, seats
+   they did not earn, crying discrimination, feminists wanting power over
+   men.
+3. Says women use sex, looks or relationships to get ahead, manipulate,
+   trap or control men. Says women in general make false accusations
+   against men. Makes sexual or degrading remarks about women.
+4. Says women should be protected, provided for, rescued first, or kept
+   out of rough jobs or public life because they are women. This counts
+   even when it sounds chivalrous or kind.
+5. Says women as a group are naturally more caring, gentle, moral, pure,
+   compassionate, intuitive or refined than men. This counts even as
+   praise, and even when used to argue for more women in Parliament.
+6. Says men are incomplete or cannot be truly happy without a woman, or
+   that every man needs a woman to adore.
+7. Anything else that stereotypes, belittles, patronises or mocks women
+   because they are women. For example: remarks on a woman's looks,
+   clothes, voice, age, marital status or childlessness; gendered insults;
+   calling women "love", "dear" or "girls" to belittle them.
+
+Also answer 1 for:
+- sexist remarks that are quoted or reported, even if the speaker
+  condemns them;
+- interjections (they count like any other statement);
+- any statement where you cannot tell whether it is sexist.
+
+=== ANSWER 0 ONLY WHEN ===
+No statement in the text could reasonably be read as any of the above.
+For example:
+- the text does not talk about women at all;
+- there is no text or it is a short speech fragment that cannot be judged;
+- it discusses policy affecting women, statistics about women, or
+  discrimination women face, without stereotyping them;
+- it criticises a woman's policies or work the same way a man's would be
+  criticised.
+
+=== WORKED EXAMPLES: ANSWER 1 ===
+Text: "The member opposite is getting hysterical again. Perhaps one of her
+male colleagues could calm her down and explain the figures to her slowly."
+Answer: 1
+Why: Treats her as irrational and needing a man to manage her (type 1).
+
+Text: "A married woman's wages are properly the concern of her husband, who
+is the head of the household."
+Answer: 1
+Why: The husband should control the wife's affairs (type 1).
+
+Text: "Parliament is no place for a woman. Governing requires a firmness of
+mind that the female sex does not possess."
+Answer: 1
+Why: Women unsuited to an important role (type 2).
+
+Text: "Under this quota scheme, women will be handed seats they could never
+win on merit."
+Answer: 1
+Why: Women's gains portrayed as undeserved (type 2).
+
+Text: "Too many women use false domestic violence claims as a weapon in the
+Family Court to cut fathers out of their children's lives."
+Answer: 1
+Why: Women in general using relationships to harm men (type 3).
+
+Text: "The minister might win more votes if she wore a shorter skirt."
+Answer: 1
+Why: A degrading sexual remark (type 3).
+
+Text: "A man's first duty is to provide for his wife, so that she need
+never go out to work."
+Answer: 1
+Why: Women to be provided for because they are women (type 4).
+
+Text: "Politics is a rough business, and I would not see the gentler sex
+exposed to its coarseness."
+Answer: 1
+Why: Women kept out of public life for their own good (type 4).
+
+Text: "Women are natural carers. It is in their nature to nurture in a way
+that men simply cannot."
+Answer: 1
+Why: Women naturally more caring than men (type 5).
+
+Text: "We need more women in this chamber, because women bring compassion
+and a spirit of cooperation that men lack."
+Answer: 1
+Why: Women credited with special traits. It counts even though the
+argument is for including women (type 5).
+
+Text: "Whatever a man achieves in public life, he is not a whole man until
+he has the love of a good woman."
+Answer: 1
+Why: Men incomplete without a woman (type 6).
+
+Text: "Behind every great man stands a woman, and without her he is
+nothing."
+Answer: 1
+Why: Men depend on women to be complete (type 6).
+
+Text: "Perhaps if the member had children of her own, she would understand
+what families go through."
+Answer: 1
+Why: Targets a woman's childlessness (type 7).
+
+Text: Interjection from Mr Hale: "Settle down, girls, the grown-ups are
+talking."
+Answer: 1
+Why: A patronising interjection aimed at women (type 7).
+
+Text: "The member for Northgate told the minister to 'go back to the
+kitchen'. That remark has no place in this chamber."
+Answer: 1
+Why: A sexist remark is quoted. Flag it, even though the speaker condemns
+it.
+
+Text: "As every husband in this place knows, the wife always has the final
+say at home."
+Answer: 1
+Why: A joke, but it may stereotype women. When in doubt, answer 1.
+
+=== WORKED EXAMPLES: ANSWER 0 ===
+Text: "The committee will now consider clause 14 of the Customs Amendment
+Bill."
+Answer: 0
+Why: Nothing about women.
+
+Text: "Women working full time still earn on average 12 per cent less than
+men, and this bill is designed to close that gap."
+Answer: 0
+Why: A statistic and a policy about women, with no stereotype.
+
+Text: "The minister has botched this rollout from start to finish and
+should resign." (The minister is a woman.)
+Answer: 0
+Why: Criticism of her work, nothing about her being a woman.
+'''

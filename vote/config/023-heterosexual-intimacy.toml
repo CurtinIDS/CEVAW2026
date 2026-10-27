@@ -1,0 +1,112 @@
+[vote]
+column = "sexism_heterosexual_intimacy"
+columns = ["body"]
+query = "maybe_sexist > 0"
+thinking = true
+model = "accurate"
+batch-size = 100
+prompt = '''
+=== TASK ===
+You will read a text from the Australian Parliament's Hansard. It may
+contain speeches, questions, answers and interjections. The text may
+already have been judged to be sexist. Your ONLY job is to decide whether
+it contains one specific, narrow form of sexism: HETEROSEXUAL INTIMACY.
+
+=== IMPORTANT ===
+Sexism takes many forms. This task is about HETEROSEXUAL INTIMACY ONLY.
+A text can be clearly sexist and still NOT contain HETEROSEXUAL INTIMACY.
+- If the text contains HETEROSEXUAL INTIMACY, answer 1, even if it is also sexist in
+  other ways.
+- If the text is sexist in some other way but does not contain HETEROSEXUAL INTIMACY,
+  answer 0.
+- If the text is not sexist at all, answer 0.
+
+=== BACKGROUND ===
+Sexism toward women can be HOSTILE (openly negative toward women) or
+BENEVOLENT (it sounds kind or flattering, but still treats women as a
+class in a stereotyped way). Benevolent sexism still counts as sexism,
+even when the speaker means well and even when it is used to argue for
+something that helps women. HETEROSEXUAL INTIMACY is a form of benevolent sexism.
+
+=== HOW TO DECIDE ===
+1. The statement must be about women as a group ("women are...", "the
+   fairer sex"), or about a particular woman BECAUSE she is a woman.
+2. The speaker must be stating the view as their own. Interjections
+   recorded in Hansard count. If a speaker quotes or reports a sexist
+   remark in order to criticise it, that is not sexism by the speaker.
+3. One qualifying statement is enough. The rest of the text can be
+   neutral.
+4. Ask: does this statement rely on a belief about what women are
+   naturally like, what they can do, or where they belong?
+5. Then check that the statement matches the definition of HETEROSEXUAL INTIMACY
+   below. Being sexist is not enough on its own.
+
+=== THESE ARE NOT SEXISM ON THEIR OWN ===
+- Discussing policy that affects women (parental leave, domestic violence
+  services, women's health, the pay gap), or giving statistics about women.
+- Saying that women face discrimination or barriers, or calling for equal
+  treatment.
+- Criticising a female member's policies or performance in the same way a
+  man would be criticised.
+- Opposing a policy such as gender quotas, as long as women are not
+  portrayed as incompetent or as seeking unfair advantage.
+- Thanking or praising a specific woman (wife, mother, colleague) without
+  any claim about women in general.
+- Facts of biology (pregnancy, childbirth, breastfeeding).
+- Formal address such as "Madam Speaker".
+- Negative statements about men (out of scope).
+
+=== DEFINITION: HETEROSEXUAL INTIMACY ===
+Men in general are said to be incomplete, unfulfilled or unable to be
+truly happy without a woman's love. Other forms are that every man should
+have a woman to adore, or that a woman is "a man's better half" as a
+general rule.
+Key test: is the claim about men IN GENERAL needing women as romantic
+partners, rather than about one person's own relationship?
+
+=== WORKED EXAMPLES: CONTAINS HETEROSEXUAL INTIMACY ===
+Text: "Whatever a man achieves in public life, he is not a whole man until
+he has the love of a good woman."
+Answer: 1
+Why: Men in general are incomplete without a woman.
+
+Text: "Behind every great man stands a woman, and without her he is
+nothing."
+Answer: 1
+Why: Men depend on women to be complete.
+
+Text: "Every man ought to have a woman to adore. Without one his life lacks
+its purpose."
+Answer: 1
+Why: Men in general need a woman to give life meaning.
+
+Text: "A bachelor, however successful, is only ever half a man."
+Answer: 1
+Why: Men are incomplete without a wife.
+
+=== WORKED EXAMPLES: DOES NOT CONTAIN HETEROSEXUAL INTIMACY ===
+(Some of these are sexist, but not in this specific way.)
+
+Text: "A man's first duty is to provide for his wife, so that she need
+never go out to work."
+Answer: 0
+Why: Sexist, but not in this way. It is about providing for women, not
+about men being incomplete without them.
+
+Text: "Women are natural carers. It is in their nature to nurture in a way
+that men simply cannot."
+Answer: 0
+Why: Sexist, but not in this way. It praises a trait in women. It does not
+say men are incomplete without women.
+
+Text: "I thank my wife Sarah, my better half, who makes me a better man
+every day."
+Answer: 0
+Why: A tribute to one specific person, not a claim about men in general.
+Not sexist.
+
+Text: "I believe marriage should remain between a man and a woman."
+Answer: 0
+Why: A view on marriage law, with no claim that men are incomplete without
+women. Not sexist.
+'''

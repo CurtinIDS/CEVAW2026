@@ -1,0 +1,115 @@
+[vote]
+column = "sexism_complementary_gender_differentiation"
+columns = ["body"]
+query = "maybe_sexist > 0"
+thinking = true
+model = "accurate"
+batch-size = 100
+prompt = '''
+=== TASK ===
+You will read a text from the Australian Parliament's Hansard. It may
+contain speeches, questions, answers and interjections. The text may
+already have been judged to be sexist. Your ONLY job is to decide whether
+it contains one specific, narrow form of sexism: COMPLEMENTARY GENDER DIFFERENTIATION.
+
+=== IMPORTANT ===
+Sexism takes many forms. This task is about COMPLEMENTARY GENDER DIFFERENTIATION ONLY.
+A text can be clearly sexist and still NOT contain COMPLEMENTARY GENDER DIFFERENTIATION.
+- If the text contains COMPLEMENTARY GENDER DIFFERENTIATION, answer 1, even if it is also sexist in
+  other ways.
+- If the text is sexist in some other way but does not contain COMPLEMENTARY GENDER DIFFERENTIATION,
+  answer 0.
+- If the text is not sexist at all, answer 0.
+
+=== BACKGROUND ===
+Sexism toward women can be HOSTILE (openly negative toward women) or
+BENEVOLENT (it sounds kind or flattering, but still treats women as a
+class in a stereotyped way). Benevolent sexism still counts as sexism,
+even when the speaker means well and even when it is used to argue for
+something that helps women. COMPLEMENTARY GENDER DIFFERENTIATION is a form of benevolent sexism.
+
+=== HOW TO DECIDE ===
+1. The statement must be about women as a group ("women are...", "the
+   fairer sex"), or about a particular woman BECAUSE she is a woman.
+2. The speaker must be stating the view as their own. Interjections
+   recorded in Hansard count. If a speaker quotes or reports a sexist
+   remark in order to criticise it, that is not sexism by the speaker.
+3. One qualifying statement is enough. The rest of the text can be
+   neutral.
+4. Ask: does this statement rely on a belief about what women are
+   naturally like, what they can do, or where they belong?
+5. Then check that the statement matches the definition of COMPLEMENTARY GENDER DIFFERENTIATION
+   below. Being sexist is not enough on its own.
+
+=== THESE ARE NOT SEXISM ON THEIR OWN ===
+- Discussing policy that affects women (parental leave, domestic violence
+  services, women's health, the pay gap), or giving statistics about women.
+- Saying that women face discrimination or barriers, or calling for equal
+  treatment.
+- Criticising a female member's policies or performance in the same way a
+  man would be criticised.
+- Opposing a policy such as gender quotas, as long as women are not
+  portrayed as incompetent or as seeking unfair advantage.
+- Thanking or praising a specific woman (wife, mother, colleague) without
+  any claim about women in general.
+- Facts of biology (pregnancy, childbirth, breastfeeding).
+- Formal address such as "Madam Speaker".
+- Negative statements about men (out of scope).
+
+=== DEFINITION: COMPLEMENTARY GENDER DIFFERENTIATION ===
+Women as a class are said to have special admirable qualities that men
+lack or have less of. Examples include moral purity, compassion,
+nurturing, gentleness, intuition, refined taste or culture, or a natural
+gift for caring or peacemaking.
+It counts even when meant as praise, and even when used to argue for more
+women in Parliament or in leadership.
+Key test: is a positive trait given to women in general, as part of their
+nature, rather than to one woman or to particular experience?
+
+=== WORKED EXAMPLES: CONTAINS COMPLEMENTARY GENDER DIFFERENTIATION ===
+Text: "Women are natural carers. It is in their nature to nurture in a way
+that men simply cannot."
+Answer: 1
+Why: Nurturing given to women by nature.
+
+Text: "We need more women in this chamber, because women bring compassion
+and a spirit of cooperation that men lack."
+Answer: 1
+Why: Gives women a special trait men lack. It counts even though the
+argument is for including women.
+
+Text: "The women of this nation have always been its moral backbone,
+purer in motive than we men."
+Answer: 1
+Why: Moral purity given to women as a class.
+
+Text: "Women have a finer sense of taste and culture than men, so the arts
+portfolio suits a lady."
+Answer: 1
+Why: Refined taste given to women as a class.
+
+=== WORKED EXAMPLES: DOES NOT CONTAIN COMPLEMENTARY GENDER DIFFERENTIATION ===
+(Some of these are sexist, but not in this specific way.)
+
+Text: "I will not vote to send our daughters into combat. Women should be
+shielded from the brutality of war."
+Answer: 0
+Why: Sexist, but not in this way. It calls for shielding women. It does
+not credit women with a special trait.
+
+Text: "Behind every great man stands a woman, and without her he is
+nothing."
+Answer: 0
+Why: Sexist, but not in this way. It says men need women. It does not
+credit women with a special trait.
+
+Text: "We need more women in this chamber, because a parliament that
+reflects the community will make better decisions."
+Answer: 0
+Why: An argument from representation, with no claim about women's nature.
+Not sexist.
+
+Text: "My mother was the most compassionate person I have ever known."
+Answer: 0
+Why: About one specific woman. Not sexist.
+'''
