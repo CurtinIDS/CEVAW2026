@@ -1,5 +1,5 @@
 [vote]
-column = "maybe_sexist"
+column = "maybe_sexism"
 columns = ["body"]
 query = ""
 thinking = true
