@@ -1,38 +1,67 @@
 #!/usr/bin/env python3
 """
-hansard_emotional_rank.py
+comparitor.py
 
-Adaptive pairwise comparison tool for rating how "emotional" short text
-excerpts are. Supports a human rater (typed at the terminal) or a local
-vLLM model as the rater, using the same adaptive sampling and scoring
-logic either way -- so swapping human for LLM is just a flag.
+Pairwise comparison tool for rating how "emotional" Hansard speeches are.
+
+Each speech is split into excerpts, and a rater is repeatedly shown two
+excerpts and asked which is more emotional (or whether they tie). A
+Bradley-Terry model is fitted to all the answers, giving every excerpt a
+log-strength score, and a speech's score is the mean of its excerpts'.
+
+Raters (--model):
+    human     answers typed at the terminal
+    fast      Gemma 4 E4B
+    balanced  Gemma 4 26B-A4B in FP8
+    accurate  Qwen3.8-27B in 4-bit
+
+The LLM raters run in vLLM's offline mode, judging --nbatch pairs per call,
+and each fits on one A100-40GB. --thinking turns on the model's thinking
+mode (with "low" effort for accurate); the thought is stripped from the
+reply before it is parsed. The prompt file (--prompt) must ask for a JSON
+reply of the form {"winner": "A" | "B" | "TIE", "reason": "..."}; the two
+excerpts are appended to it as TEXT A and TEXT B.
+
+Pairs are drawn at random, favouring the least-compared excerpts, and the
+two excerpts' positions are swapped at random to avoid a position bias.
+Each comparison is appended to <corpus>.<prompt>.<rater>.comparisons.jsonl
+as soon as it is made, where <corpus> and <prompt> are the parquet and
+prompt paths without their extensions, and <rater> is the --model, with
+"-thinking" added when --thinking is on (e.g. fast-thinking). --prompt is
+required for a human rater too, so that its files are named the same way,
+although the human is never shown the prompt. So the judgements of each
+prompt and rater, with and without thinking, are kept apart for comparison,
+and a session can be stopped at any point (q, Ctrl-C, or too many
+consecutive LLM errors) and resumed later. To use several GPUs,
+run one `compare` process per GPU, each with its own CUDA_VISIBLE_DEVICES;
+they share the log through file locks.
 
 Usage:
-    # human rater (default) -- runs until you quit (q) or Ctrl-C
-    python hansard_emotional_rank.py compare corpus.json
+    # human rater -- runs until you quit (q) or Ctrl-C
+    python comparitor.py compare corpus.parquet --model human \
+        --prompt prompt.txt
 
-    # LLM rater, via a local vLLM model (offline batch inference) -- runs
-    # indefinitely; Ctrl-C is safe at any point, since each comparison is
-    # flushed to disk as it's made
-    python hansard_emotional_rank.py compare corpus.json \
-        --rater llm \
-        --prompt "Decide which excerpt expresses more emotion." \
-        --llm-model google/gemma-4-E4B-it \
-        --nbatch 500
+    # LLM rater -- runs until Ctrl-C
+    python comparitor.py compare corpus.parquet --model fast \
+        --prompt prompt.txt --thinking --nbatch 500
 
-    python hansard_emotional_rank.py scores corpus.json
-    python hansard_emotional_rank.py reset  corpus.json
+    # fit the scores and print them with reliability diagnostics; saves
+    # {source_id: (score, error)} to <corpus>.<prompt>.<rater>.scores.pkl,
+    # and with --colname also writes the scores and errors back to the
+    # corpus file
+    python comparitor.py scores corpus.parquet --model fast \
+        --prompt prompt.txt --thinking --colname emotion
+
+    # delete a comparisons log
+    python comparitor.py reset corpus.parquet --model fast \
+        --prompt prompt.txt --thinking
 
 Corpus format:
-    JSON file containing a list of objects: [{"id": "...", "text": "..."}, ...]
-    ("id" is optional -- one is generated from the row index if missing.)
-    CSV files with "text" (and optional "id") columns are also accepted.
-
-Long texts are split into ~3-4 sentence excerpts, since comparing whole
-speeches side by side is hard for a human (or an LLM) to judge reliably.
-Comparisons are appended to <corpus>.comparisons.jsonl next to the corpus
-file, one JSON record per line, so a session can be stopped (q, Ctrl-C, or
-a run of LLM errors) and resumed later without losing progress.
+    A parquet file with one speech per row: the row index is the speech id
+    and the `body` column its text. Rows whose `name` contains "speaker"
+    (the Speaker and their deputies) are skipped. Speeches longer than 12
+    sentences are split into excerpts of at least 6 sentences each; shorter
+    ones are compared whole.
 """
 
 import argparse
@@ -45,6 +74,7 @@ import re
 import textwrap
 import time
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -57,8 +87,48 @@ VIRTUAL_ANCHOR = "__anchor__"  # fixed reference point used to regularise the fi
 WINNER_TO_RESULT = {"A": "a", "B": "b", "TIE": "tie"}
 
 
+@dataclass(frozen=True)
+class Model:
+    name: str
+    max_tokens_thinking: int  # room for the thought as well
+    llm_args: dict = field(default_factory=dict)  # extra arguments for LLM()
+    chat_args: dict = field(default_factory=dict)  # extra chat template arguments
+
+
+MODELS = {
+    "fast": Model("google/gemma-4-E4B-it", 4096),
+    "balanced": Model(
+        "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",  # about 26 GB
+        8192,
+        # text only, so that no memory is reserved for the vision encoder
+        llm_args={"limit_mm_per_prompt": {"image": 0, "audio": 0}},
+    ),
+    "accurate": Model(
+        "TelperionAI/Qwen3.8-27B-INT4-AWQ-GPTQ",  # W4A16, 25 GB
+        16384,
+        # only about 200 recurrent-state cache blocks fit next to its weights on a 40 GB card
+        llm_args={"max_num_seqs": 128},
+        # the thinking effort (xhigh by default) is only a hint added to the system prompt, not a hard
+        # limit, and is ignored when thinking is off
+        chat_args={"reasoning_effort": "low"},
+    ),
+}
+MAX_MODEL_LEN = 65536
+MAX_TOKENS = 1024  # room for the JSON answer when not thinking
+
+# Removes, in one pass: everything up to the end of the thought block (Gemma 4: <|channel>thought ... <channel|>;
+# Qwen: ... </think>, as its chat template opens the block in the prompt), end-of-turn sentinels, a stray leading
+# "thought" label, and markdown code fences / backticks.
+CLEAN = re.compile(
+    r"^.*?(?:<channel\|>|</think>)|<turn\|>|<eos>|<\|im_end\|>|<\|endoftext\|>|^thought\n|```(?:json)?|`",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 def load_corpus(path):
-    """Load a list of {"id", "text"} dicts from a JSON or CSV file."""
+    """Load the speeches in a parquet file as {"id", "text"} dicts, with the row
+    index as the id and the `body` column as the text, skipping rows whose
+    `name` contains "speaker"."""
     df = pd.read_parquet(path)
     df = df.query("not name.str.lower().str.contains('speaker')")
     print(f"Loaded {len(df)} rows of text")
@@ -101,8 +171,18 @@ def build_excerpts(corpus):
     return excerpts
 
 
-def log_path_for(corpus_path):
-    return Path(corpus_path).with_suffix("").with_suffix(".comparisons.jsonl")
+def rater_name(args):
+    """The rater's name, used in its file names and log records: the --model,
+    with "-thinking" added when thinking is on."""
+    return f"{args.model}-thinking" if args.thinking else args.model
+
+
+def output_path(args, kind):
+    """<corpus>.<prompt>.<rater>.<kind>, next to the corpus file, so that the
+    files of each prompt and rater are kept apart."""
+    corpus = Path(args.corpus)
+    prompt = Path(args.prompt).stem
+    return corpus.with_name(f"{corpus.stem}.{prompt}.{rater_name(args)}.{kind}")
 
 
 def load_comparisons(log_path):
@@ -238,25 +318,15 @@ def reliability(excerpt_ids, comparisons, pi=None):
     return max(0.0, 1.0 - mean_error_var / observed_var) if observed_var > 0 else 0.0
 
 
-def _bootstrap_replicate(excerpt_ids, comparisons, base_pi, rng):
-    m = len(comparisons)
-    sample = [comparisons[i] for i in rng.integers(0, m, size=m)]
-    pi_b = fit_scores(excerpt_ids, sample, warm_start=base_pi)
-    return np.log(list(pi_b.values()))
-
-
 def bootstrap_errors(excerpts, comparisons, n_boot):
     """
-    Empirical per-item error via bootstrap, with replicates run concurrently.
-    fit_scores is numpy-bound (bincount, elementwise array arithmetic), and
-    numpy releases the GIL during those C-level operations, so threads can
-    genuinely overlap here rather than just serializing behind the GIL the
-    way pure-Python-bound work would. Each replicate gets its own
-    independent RNG stream (SeedSequence.spawn), since sharing one RNG
-    object across threads is not safe to call concurrently.
+    Empirical per-source error via bootstrap: resample the comparisons with
+    replacement n_boot times, refit, and average each replicate's excerpt
+    log-strengths up to sources. Returns {source_id: standard deviation of
+    its score across the replicates}. Aggregating inside each replicate
+    accounts for any correlation between a source's excerpts.
     """
-    source_ids = {e["source_id"] for e in excerpts}
-    excerpt_ids = {e["excerpt_id"] for e in excerpts}
+    excerpt_ids = [e["excerpt_id"] for e in excerpts]
 
     rng = np.random.default_rng()
     m = len(comparisons)
@@ -264,16 +334,17 @@ def bootstrap_errors(excerpts, comparisons, n_boot):
         list(fit_scores(excerpt_ids, comparisons).values())
     )  # warm-start reference
 
-    thetas = np.empty((n_boot, len(source_ids)))
-    for b in range(n_boot):
+    replicates = []
+    for _ in range(n_boot):
         sample = [comparisons[i] for i in rng.integers(0, m, size=m)]
         excerpt_scores = fit_scores(
             excerpt_ids, sample, warm_start=base_pi, tolerance=5e-2
         )
-        source_scores = aggregate_to_sources(excerpts, excerpt_scores)
-        thetas[b] = list(source_scores.values())
+        replicates.append(aggregate_to_sources(excerpts, excerpt_scores))
 
-    return dict(zip(source_ids, thetas.std(axis=0)))
+    # a DataFrame lines the replicates up by source id, so every error is
+    # paired with its own source
+    return pd.DataFrame(replicates).std(ddof=0).to_dict()
 
 
 def bootstrap_summary(errors):
@@ -287,29 +358,32 @@ def bootstrap_summary(errors):
 
 def pick_pairs(excerpt_ids, counts, k):
     """
-    Select up to k pairs with no locality constraint at all: draw the top
-    2k excerpts by the same low-count-weighted priority pick_pairs uses,
-    then pair them up in a random order among themselves regardless of
-    score. Doesn't check seen_pairs -- with 2k items drawn from the full
-    corpus the odds of blindly re-pairing an already-seen comparison are
-    low, and avoiding that would need the same score-neighbor machinery
-    this is deliberately skipping.
+    Select up to k pairs: draw excerpts without replacement, favouring those
+    with the fewest comparisons so far, then pair them up at random
+    regardless of their scores. When there are fewer than 2k excerpts, this
+    is repeated, with each round's picks counted before the next, until there
+    are k pairs. Pairs that have already been compared are not avoided -- in
+    a large corpus a repeat is unlikely.
     """
     count = np.array([counts.get(e, 0) for e in excerpt_ids])
+    pairs = []
+    while len(excerpt_ids) >= 2 and len(pairs) < k:
+        # Efraimidis-Spirakis weighted sampling without replacement: orders
+        # excerpts favoring low comparison counts. Computed in log-space to
+        # avoid underflows to bit-exact 0.0. In linear space, this would be:
+        # np.random.random(len(count)) ** weight
+        weight = (count + 1) ** 2
+        log_keys = np.log(np.random.random(len(count))) * weight
+        top = np.argsort(-log_keys)[: 2 * (k - len(pairs))]
+        top = top[: len(top) // 2 * 2]  # an odd one out would go unpaired
 
-    # Efraimidis-Spirakis weighted sampling without replacement: orders
-    # excerpts favoring low comparison counts. Computed in log-space to
-    # avoid underflows to bit-exact 0.0. In linear space, this would be:
-    # np.random.random(len(count)) ** weight
-    weight = (count + 1) ** 2
-    log_keys = np.log(np.random.random(len(count))) * weight
-    top = np.argsort(-log_keys)[: 2 * k]
-
-    np.random.shuffle(top)
-    return [
-        (excerpt_ids[top[i]], excerpt_ids[top[i + 1]])
-        for i in range(0, len(top) - 1, 2)
-    ]
+        np.random.shuffle(top)
+        pairs += [
+            (excerpt_ids[top[i]], excerpt_ids[top[i + 1]])
+            for i in range(0, len(top), 2)
+        ]
+        count[top] += 1
+    return pairs
 
 
 def ask_human(text_a, text_b, width=90):
@@ -332,19 +406,22 @@ def build_llm_prompt(prompt, text_a, text_b):
 
 
 def parse_llm_response(raw):
-    """Parse the model's JSON reply, tolerating minor wrapping around the object."""
+    """Parse the model's JSON reply, after stripping any thought block,
+    end-of-turn tokens and code fences, tolerating other text around it."""
+    text = CLEAN.sub("", raw).strip()
     try:
-        return json.loads(raw)
+        return json.loads(text)
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        match = re.search(r"\{.*\}", text, re.DOTALL)
         if not match:
             raise
         return json.loads(match.group(0))
 
 
-def ask_llm_batch(pairs, text_by_id, prompt, llm, sampling_params):
+def ask_llm_batch(pairs, text_by_id, prompt, llm, sampling_params, template_args):
     """Ask the LLM to judge a whole batch of pairs in a single vLLM call;
-    returns a (result, reason, error_flag) tuple per pair, same order."""
+    returns a (result, reason) tuple per pair, in the same order. result is
+    None when the reply could not be parsed, and reason then says why."""
     messages = [
         [
             {
@@ -357,7 +434,7 @@ def ask_llm_batch(pairs, text_by_id, prompt, llm, sampling_params):
     outputs = llm.chat(
         messages,
         sampling_params=sampling_params,
-        chat_template_kwargs={"enable_thinking": False},
+        chat_template_kwargs=template_args,
     )
 
     results = []
@@ -367,7 +444,8 @@ def ask_llm_batch(pairs, text_by_id, prompt, llm, sampling_params):
             winner = str(parsed.get("winner", "")).strip().upper()
             result = WINNER_TO_RESULT.get(winner)
             results.append((result, parsed.get("reason", "")))
-        except Exception as exc:
+        # a reply that isn't JSON, or isn't a JSON object
+        except (ValueError, AttributeError) as exc:
             results.append((None, f"request failed: {exc}"))
     return results
 
@@ -376,22 +454,30 @@ def run_compare(args):
     excerpts = build_excerpts(load_corpus(args.corpus))
     excerpt_ids = [e["excerpt_id"] for e in excerpts]
     text_by_id = {e["excerpt_id"]: e["text"] for e in excerpts}
-    log_path = log_path_for(args.corpus)
+    rater = rater_name(args)
+    log_path = output_path(args, "comparisons.jsonl")
 
-    if args.prompt:
-        with open(args.prompt) as f:
-            prompt = f.read()
-    else:
-        prompt = ""
+    with open(args.prompt) as f:
+        prompt = f.read()
 
-    if args.rater == "llm":
-        llm = LLM(model=args.llm_model, generation_config="auto")
+    if args.model != "human":
+        model = MODELS[args.model]
+        llm = LLM(
+            model=model.name,
+            max_model_len=MAX_MODEL_LEN,
+            generation_config="auto",
+            **model.llm_args,
+        )
+        # the model's own generation_config.json values, except for the length...
         sampling_params = llm.get_default_sampling_params()
         sampling_params.max_tokens = (
-            1024  # room for a ~2000-char reason plus JSON overhead
+            model.max_tokens_thinking if args.thinking else MAX_TOKENS
         )
+        # ...and the thought delimiters, which must not be stripped when thinking
+        sampling_params.skip_special_tokens = not args.thinking
+        template_args = {"enable_thinking": args.thinking, **model.chat_args}
     else:
-        llm, sampling_params = None, None
+        llm, sampling_params, template_args = None, None, None
 
     done, consecutive_errors = 0, 0
     round_pairs = []
@@ -405,14 +491,16 @@ def run_compare(args):
                     print("No further pairs available.")
                     break
 
-            if args.rater == "llm":
+            if args.model != "human":
                 batch = [
                     (b, a) if random.random() < 0.5 else (a, b) for a, b in round_pairs
                 ]  # avoid a systematic left/right or A/B bias
                 round_pairs = []
                 for (a, b), (result, reason) in zip(
                     batch,
-                    ask_llm_batch(batch, text_by_id, prompt, llm, sampling_params),
+                    ask_llm_batch(
+                        batch, text_by_id, prompt, llm, sampling_params, template_args
+                    ),
                 ):
                     if result is None:
                         consecutive_errors += 1
@@ -426,7 +514,7 @@ def run_compare(args):
                     consecutive_errors = 0
                     print(f"{a} vs {b}: {result.upper()} -- {reason}")
                     append_comparison(
-                        log_path, a, b, result, rater=args.rater, reason=reason
+                        log_path, a, b, result, rater=rater, reason=reason
                     )
                     done += 1
                 continue
@@ -442,7 +530,7 @@ def run_compare(args):
                 return
             result, reason = {"1": "a", "2": "b", "e": "tie"}[choice], ""
 
-            append_comparison(log_path, a, b, result, rater=args.rater, reason=reason)
+            append_comparison(log_path, a, b, result, rater=rater, reason=reason)
             done += 1
     except KeyboardInterrupt:
         print(f"\nInterrupted -- {done} comparisons logged this session -> {log_path}")
@@ -454,7 +542,7 @@ def run_compare(args):
 def run_scores(args):
     excerpts = build_excerpts(load_corpus(args.corpus))
     excerpt_ids = [e["excerpt_id"] for e in excerpts]
-    comparisons = load_comparisons(log_path_for(args.corpus))
+    comparisons = load_comparisons(output_path(args, "comparisons.jsonl"))
     if not comparisons:
         print("No comparisons logged yet -- run the 'compare' command first.")
         return
@@ -507,7 +595,7 @@ def run_scores(args):
 
     source_scores = {sid: (score, errors[sid]) for sid, score in source_scores.items()}
 
-    filename = Path(args.corpus).with_suffix("").with_suffix(".scores.pkl")
+    filename = output_path(args, "scores.pkl")
     with open(filename, "wb") as f:
         pickle.dump(source_scores, f)
 
@@ -523,7 +611,7 @@ def run_scores(args):
 
 
 def run_reset(args):
-    log_path = log_path_for(args.corpus)
+    log_path = output_path(args, "comparisons.jsonl")
     if not log_path.exists():
         print("No comparisons log to remove.")
         return
@@ -538,22 +626,36 @@ def main():
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("compare", help="run a comparison session (human or LLM rater)")
-    p.add_argument("corpus")
-    p.add_argument(
-        "--rater",
-        choices=["human", "llm"],
-        default="human",
-        help="who makes the judgements",
+    # shared by every subcommand, since the rater also names the files used
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("corpus", help="parquet file of speeches")
+    common.add_argument(
+        "--model",
+        required=True,
+        choices=["human", *MODELS],
+        help="who makes the judgements, which also names the files used: human "
+        "(at the terminal), fast (Gemma 4 E4B), balanced (Gemma 4 26B-A4B in FP8) or "
+        "accurate (Qwen3.8-27B in 4-bit)",
     )
-    p.add_argument(
+    common.add_argument(
+        "--thinking",
+        action="store_true",
+        help="enable the LLM's thinking mode (with low effort for accurate); this "
+        "also names the files used, so judgements with and without thinking are "
+        "kept apart",
+    )
+    common.add_argument(
         "--prompt",
-        help="file containing the prompt given to the LLM rater (ignored for --rater human)",
+        required=True,
+        help="file containing the prompt given to an LLM rater; its name, without the "
+        "extension, also names the files used, so the judgements for each prompt are "
+        "kept apart (required for a human rater too, though it is not shown)",
     )
-    p.add_argument(
-        "--llm-model",
-        default="google/gemma-4-E4B-it",
-        help="vLLM model name (Hugging Face repo id) or local path",
+
+    p = sub.add_parser(
+        "compare",
+        parents=[common],
+        help="run a comparison session (human or LLM rater)",
     )
     p.add_argument(
         "--nbatch",
@@ -569,19 +671,25 @@ def main():
     )
     p.set_defaults(func=run_compare)
 
-    p = sub.add_parser("scores", help="print current per-text emotional scores")
-    p.add_argument("corpus")
-    p.add_argument("--colname", help="The column name to write results to")
+    p = sub.add_parser(
+        "scores", parents=[common], help="print current per-text emotional scores"
+    )
+    p.add_argument(
+        "--colname",
+        help="also write each speech's score and error to this column and "
+        "<colname>_error of the corpus file",
+    )
     p.set_defaults(func=run_scores)
 
-    p = sub.add_parser("reset", help="delete the logged comparisons for a corpus")
-    p.add_argument("corpus")
+    p = sub.add_parser(
+        "reset", parents=[common], help="delete the logged comparisons for a corpus"
+    )
     p.set_defaults(func=run_reset)
 
     args = parser.parse_args()
 
-    if getattr(args, "rater", None) == "llm" and not args.prompt:
-        parser.error("--prompt is required when --rater llm")
+    if args.model == "human" and args.thinking:
+        parser.error("--thinking needs an LLM --model")
 
     args.func(args)
 
