@@ -1,4 +1,4 @@
-"""Ask Gemma 4 E4B or Qwen3.8-27B (vLLM, offline) a yes/no question about every row of a parquet file. Each row is judged
+"""Ask Gemma 4 E4B or Qwen3.8-Flash-Next (vLLM, offline) a yes/no question about every row of a parquet file. Each row is judged
 --evals times independently with the prompt given in --prompt. Writes --column (the fraction of evaluations
 that answered 1, from 0 to 1) and <column>_reason (every evaluation's reason, joined with ' | ') back to
 the same parquet file.
@@ -12,14 +12,17 @@ the full prompt, and every other setting, in a file you can store:
     Does the text discuss ...?
     '''
 
---model picks the LLM: "fast" (the default) is Gemma 4 E4B, "balanced" is Gemma 4 26B-A4B in FP8 and
-"accurate" is Qwen3.8-27B in 4-bit, so that they fit one A100-40GB. All can think (--thinking), and the
-thought is stripped from the answer. For "accurate" the thinking effort is set to low.
+--model picks the LLM, from models.py: "fast" (the default) is Gemma 4 E4B and "balanced" is Gemma 4 26B-A4B
+in FP8, each on one A100-40GB, and "accurate" is Qwen3.8-Flash-Next in 4-bit across four (TP=4), with its n-gram
+table in host RAM. All can think (--thinking), and the thought is stripped from the answer. For "accurate" the
+thinking effort is set to medium.
 
-The work is split into batches of --batch-size documents that --gpus independent vLLM replicas (one per GPU)
-pull from a shared queue.
+The work is split into batches of --batch-size documents that independent vLLM replicas (one per GPU, or one
+per four GPUs for "accurate") pull from a shared queue.
 Each finished batch is saved to <parquet>.<column>.parts/, so an interrupted or failed run resumes where it
-stopped. The parquet file itself is only rewritten once every batch is done."""
+stopped. The parquet file itself is only rewritten once every batch is done.
+
+Run it from the top-level folder as a module, python -m vote.vote, so that models.py can be imported."""
 
 import argparse
 import json
@@ -31,41 +34,14 @@ import re
 import shutil
 import time
 import traceback
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import configargparse
 import numpy as np
 import pandas as pd
 
+from models import MAX_MODEL_LEN, MODELS
 
-@dataclass(frozen=True)
-class Model:
-    name: str
-    max_tokens_thinking: int  # room for the thought as well
-    llm_args: dict = field(default_factory=dict)  # extra arguments for LLM()
-    chat_args: dict = field(default_factory=dict)  # extra chat template arguments
-
-
-MODELS = {
-    "fast": Model("google/gemma-4-E4B-it", 4096),
-    "balanced": Model(
-        "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",  # about 26 GB
-        8192,
-        # text only, so that no memory is reserved for the vision encoder
-        llm_args={"limit_mm_per_prompt": {"image": 0, "audio": 0}},
-    ),
-    "accurate": Model(
-        "TelperionAI/Qwen3.8-27B-INT4-AWQ-GPTQ",  # W4A16, 25 GB
-        16384,
-        # only about 200 recurrent-state cache blocks fit next to its weights on a 40 GB card
-        llm_args={"max_num_seqs": 128},
-        # the thinking effort (xhigh by default) is only a hint added to the system prompt, not a hard
-        # limit, and is ignored when thinking is off
-        chat_args={"reasoning_effort": "low"},
-    ),
-}
-MAX_MODEL_LEN = 65536
 MAX_CONSECUTIVE_ERRORS = 5
 HEAD_CHARS, TAIL_CHARS = 12000, 4000  # longer fields keep only their start and end
 MAX_TOKENS = 256  # room for a JSON answer with a one-sentence reason
@@ -231,7 +207,8 @@ def worker(gpu, args, positions, shown, parts_dir, tasks, results):
 def run_workers(args, positions, shown, parts_dir, todo):
     context = mp.get_context("spawn")  # a forked process cannot safely use CUDA
     tasks, results = context.Queue(), context.Queue()
-    n_workers = min(args.gpus, len(todo))
+    per_replica = MODELS[args.model].gpus
+    n_workers = min(args.gpus // per_replica, len(todo))
     for start in todo:
         tasks.put(start)
     for _ in range(n_workers):
@@ -239,9 +216,13 @@ def run_workers(args, positions, shown, parts_dir, todo):
     workers = [
         context.Process(
             target=worker,
-            args=(gpu, args, positions, shown, parts_dir, tasks, results),
+            args=(gpus, args, positions, shown, parts_dir, tasks, results),
         )
-        for gpu in range(n_workers)
+        # each replica's GPUs, as a CUDA_VISIBLE_DEVICES value such as "0" or "0,1,2,3"
+        for gpus in (
+            ",".join(str(i * per_replica + j) for j in range(per_replica))
+            for i in range(n_workers)
+        )
     ]
     for w in workers:
         w.start()
@@ -319,7 +300,7 @@ def main():
         "--gpus",
         type=int,
         default=4,
-        help="number of GPUs, each running its own model replica",
+        help="number of GPUs; each model replica takes one, or four for accurate",
     )
     parser.add_argument(
         "--batch-size",
@@ -331,7 +312,7 @@ def main():
         "--model",
         choices=MODELS,
         default="fast",
-        help="fast: Gemma 4 E4B; balanced: Gemma 4 26B-A4B in FP8; accurate: Qwen3.8-27B in 4-bit",
+        help="fast: Gemma 4 E4B; balanced: Gemma 4 26B-A4B in FP8; accurate: Qwen3.8-Flash-Next in 4-bit, on four GPUs",
     )
     parser.add_argument("--thinking", action="store_true", help="enable thinking mode")
     parser.add_argument(
@@ -343,6 +324,10 @@ def main():
         parser.error("--evals must be at least 1")
     if args.gpus < 1:
         parser.error("--gpus must be at least 1")
+    if args.gpus % MODELS[args.model].gpus:
+        parser.error(
+            f"--model {args.model} needs a multiple of {MODELS[args.model].gpus} GPUs"
+        )
     if args.batch_size < 1:
         parser.error("--batch-size must be at least 1")
     if not args.prompt.strip():

@@ -13,48 +13,71 @@ Raters (--model):
     human     answers typed at the terminal
     fast      Gemma 4 E4B
     balanced  Gemma 4 26B-A4B in FP8
-    accurate  Qwen3.8-27B in 4-bit
+    accurate  Qwen3.8-Flash-Next in 4-bit
 
-The LLM raters run in vLLM's offline mode, judging --nbatch pairs per call,
-and each fits on one A100-40GB. --thinking turns on the model's thinking
-mode (with "low" effort for accurate); the thought is stripped from the
-reply before it is parsed. The prompt file (--prompt) must ask for a JSON
-reply of the form {"winner": "A" | "B" | "TIE", "reason": "..."}; the two
-excerpts are appended to it as TEXT A and TEXT B.
+The LLM raters run in vLLM's offline mode, judging --nbatch pairs per call;
+their settings are in models.py. fast and balanced each fit on one
+A100-40GB, and accurate spans four (TP=4), with its n-gram table in host
+RAM. --thinking turns on the model's thinking mode (with "medium" effort
+for accurate); the thought is stripped from the reply before it is parsed.
+The prompt (--prompt, given as text) must ask
+for a JSON reply of the form {"winner": "A" | "B" | "TIE", "reason":
+"..."}; the two excerpts are appended to it as TEXT A and TEXT B.
 
 Pairs are drawn at random, favouring the least-compared excerpts, and the
 two excerpts' positions are swapped at random to avoid a position bias.
-Each comparison is appended to <corpus>.<prompt>.<rater>.comparisons.jsonl
-as soon as it is made, where <corpus> and <prompt> are the parquet and
-prompt paths without their extensions, and <rater> is the --model, with
-"-thinking" added when --thinking is on (e.g. fast-thinking). --prompt is
-required for a human rater too, so that its files are named the same way,
-although the human is never shown the prompt. So the judgements of each
-prompt and rater, with and without thinking, are kept apart for comparison,
-and a session can be stopped at any point (q, Ctrl-C, or too many
-consecutive LLM errors) and resumed later. To use several GPUs,
-run one `compare` process per GPU, each with its own CUDA_VISIBLE_DEVICES;
-they share the log through file locks.
+Each comparison is appended to <corpus>.<colname>.<rater>.comparisons.jsonl
+as soon as it is made, where <corpus> is the parquet path without its
+extension, --colname names the experiment, and <rater> is the --model, with
+"-thinking" added when --thinking is on (e.g. fast-thinking). So every
+experiment and rater, with and without thinking, has its own log, and a
+session can be stopped at any point (q, Ctrl-C, or too many consecutive LLM
+errors) and resumed later. For a fair comparison between raters,
+--max-comparisons stops `compare` once the log holds that many comparisons;
+parallel processes can overshoot it by up to a batch each, so `scores` then
+fits only the first that many. The settings that affect the judgements (model,
+thinking and prompt) are saved to <corpus>.<colname>.<rater>.config.json
+when the log is first written to, and a later `compare` or `scores` with
+different settings is refused, so that one log never mixes judgements made
+with different prompts. --prompt is required for a human rater too, though
+the human is never shown it. To use several GPUs, run one `compare` process
+per GPU, each with its own CUDA_VISIBLE_DEVICES; they share the log through
+file locks. accurate already takes four GPUs, so give its process four.
 
-Usage:
-    # human rater -- runs until you quit (q) or Ctrl-C
-    python comparitor.py compare corpus.parquet --model human \
-        --prompt prompt.txt
+Every option can also be set in a TOML file (-c/--config), under a
+[comparitor] table, with the option name without its leading dashes as the
+key (e.g. max-errors); the command line takes precedence. Keeping one such
+file per experiment records exactly how its judgements were made, and the
+same file serves every mode, which is always given on the command line:
 
-    # LLM rater -- runs until Ctrl-C
-    python comparitor.py compare corpus.parquet --model fast \
-        --prompt prompt.txt --thinking --nbatch 500
+    [comparitor]
+    corpus = "hansard.parquet"
+    colname = "emotion"
+    model = "fast"
+    thinking = true
+    prompt = '''
+    Decide which of the two excerpts expresses more emotion. ...
+    '''
+
+Relative paths in the file are taken relative to the current directory,
+not to the file.
+
+Usage, from the top-level folder, so that models.py can be imported:
+    # judge pairs -- an LLM rater runs until Ctrl-C, a human one until q
+    python -m comparitor.comparitor compare -c emotion.toml
 
     # fit the scores and print them with reliability diagnostics; saves
-    # {source_id: (score, error)} to <corpus>.<prompt>.<rater>.scores.pkl,
-    # and with --colname also writes the scores and errors back to the
-    # corpus file
-    python comparitor.py scores corpus.parquet --model fast \
-        --prompt prompt.txt --thinking --colname emotion
+    # {source_id: (score, error)} to <corpus>.<colname>.<rater>.scores.pkl,
+    # and writes the scores and errors to the <colname> and <colname>_error
+    # columns of the corpus file
+    python -m comparitor.comparitor scores -c emotion.toml
 
-    # delete a comparisons log
-    python comparitor.py reset corpus.parquet --model fast \
-        --prompt prompt.txt --thinking
+    # delete a comparisons log and its saved settings
+    python -m comparitor.comparitor reset -c emotion.toml
+
+    # without a config file, the required options go on the command line
+    python -m comparitor.comparitor compare --corpus hansard.parquet --colname emotion \
+        --model fast --prompt "Decide which ..." --thinking
 
 Corpus format:
     A parquet file with one speech per row: the row index is the speech id
@@ -68,52 +91,27 @@ import argparse
 import fcntl
 import json
 import math
+import os
 import pickle
 import random
 import re
 import textwrap
 import time
 from collections import Counter
-from dataclasses import dataclass, field
 from pathlib import Path
 
+import configargparse
 import numpy as np
 import pandas as pd
 from vllm import LLM
+
+from models import MAX_MODEL_LEN, MODELS
 
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 VIRTUAL_ANCHOR = "__anchor__"  # fixed reference point used to regularise the fit
 
 WINNER_TO_RESULT = {"A": "a", "B": "b", "TIE": "tie"}
 
-
-@dataclass(frozen=True)
-class Model:
-    name: str
-    max_tokens_thinking: int  # room for the thought as well
-    llm_args: dict = field(default_factory=dict)  # extra arguments for LLM()
-    chat_args: dict = field(default_factory=dict)  # extra chat template arguments
-
-
-MODELS = {
-    "fast": Model("google/gemma-4-E4B-it", 4096),
-    "balanced": Model(
-        "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",  # about 26 GB
-        8192,
-        # text only, so that no memory is reserved for the vision encoder
-        llm_args={"limit_mm_per_prompt": {"image": 0, "audio": 0}},
-    ),
-    "accurate": Model(
-        "TelperionAI/Qwen3.8-27B-INT4-AWQ-GPTQ",  # W4A16, 25 GB
-        16384,
-        # only about 200 recurrent-state cache blocks fit next to its weights on a 40 GB card
-        llm_args={"max_num_seqs": 128},
-        # the thinking effort (xhigh by default) is only a hint added to the system prompt, not a hard
-        # limit, and is ignored when thinking is off
-        chat_args={"reasoning_effort": "low"},
-    ),
-}
-MAX_MODEL_LEN = 65536
 MAX_TOKENS = 1024  # room for the JSON answer when not thinking
 
 # Removes, in one pass: everything up to the end of the thought block (Gemma 4: <|channel>thought ... <channel|>;
@@ -178,11 +176,30 @@ def rater_name(args):
 
 
 def output_path(args, kind):
-    """<corpus>.<prompt>.<rater>.<kind>, next to the corpus file, so that the
-    files of each prompt and rater are kept apart."""
+    """<corpus>.<colname>.<rater>.<kind>, next to the corpus file, so that the
+    files of each experiment and rater are kept apart."""
     corpus = Path(args.corpus)
-    prompt = Path(args.prompt).stem
-    return corpus.with_name(f"{corpus.stem}.{prompt}.{rater_name(args)}.{kind}")
+    return corpus.with_name(f"{corpus.stem}.{args.colname}.{rater_name(args)}.{kind}")
+
+
+def check_settings(args, create):
+    """Refuse to mix judgements made with different settings in one log: the
+    settings that affect the judgements are saved next to the log the first
+    time it is written to (when `create`), and must match on every later run."""
+    path = output_path(args, "config.json")
+    settings = {
+        "model": MODELS[args.model].name if args.model in MODELS else args.model,
+        "thinking": args.thinking,
+        "prompt": args.prompt.strip(),
+    }
+    if path.exists():
+        if json.loads(path.read_text()) != settings:
+            raise SystemExit(
+                f"{path} holds different settings (model, thinking or prompt) from "
+                "these. Use another --colname, or reset this one to start afresh."
+            )
+    elif create:
+        path.write_text(json.dumps(settings, indent=2) + "\n")
 
 
 def load_comparisons(log_path):
@@ -454,11 +471,14 @@ def run_compare(args):
     excerpts = build_excerpts(load_corpus(args.corpus))
     excerpt_ids = [e["excerpt_id"] for e in excerpts]
     text_by_id = {e["excerpt_id"]: e["text"] for e in excerpts}
+    if len(excerpt_ids) < 2:
+        raise SystemExit(
+            "The corpus has fewer than 2 excerpts, so there is nothing to compare."
+        )
     rater = rater_name(args)
     log_path = output_path(args, "comparisons.jsonl")
-
-    with open(args.prompt) as f:
-        prompt = f.read()
+    check_settings(args, create=True)
+    prompt = args.prompt.strip()
 
     if args.model != "human":
         model = MODELS[args.model]
@@ -485,11 +505,17 @@ def run_compare(args):
         while True:
             if not round_pairs:
                 comparisons = load_comparisons(log_path)
+                k = args.nbatch
+                if args.max_comparisons:
+                    k = min(k, args.max_comparisons - len(comparisons))
+                    if k <= 0:
+                        print(
+                            f"The log holds {len(comparisons)} comparisons, reaching "
+                            f"--max-comparisons ({args.max_comparisons})."
+                        )
+                        break
                 counts = comparison_counts(excerpt_ids, comparisons)
-                round_pairs = pick_pairs(excerpt_ids, counts, args.nbatch)
-                if not round_pairs:
-                    print("No further pairs available.")
-                    break
+                round_pairs = pick_pairs(excerpt_ids, counts, k)
 
             if args.model != "human":
                 batch = [
@@ -542,10 +568,15 @@ def run_compare(args):
 def run_scores(args):
     excerpts = build_excerpts(load_corpus(args.corpus))
     excerpt_ids = [e["excerpt_id"] for e in excerpts]
+    check_settings(args, create=False)
     comparisons = load_comparisons(output_path(args, "comparisons.jsonl"))
     if not comparisons:
         print("No comparisons logged yet -- run the 'compare' command first.")
         return
+    logged = len(comparisons)
+    # the log is in the order the comparisons were made, so this keeps the
+    # first ones, and every rater is fitted on the same number of them
+    comparisons = comparisons[: args.max_comparisons]
 
     counts = comparison_counts(excerpt_ids, comparisons)
     print("Fitting scores...")
@@ -572,8 +603,9 @@ def run_scores(args):
 
     by_rater = Counter(c.get("rater", "human") for c in comparisons)
     breakdown = ", ".join(f"{rater}: {n}" for rater, n in sorted(by_rater.items()))
+    used = f", the first {len(comparisons)} used" if len(comparisons) < logged else ""
     print(
-        f"\n{len(comparisons)} comparisons logged in total ({breakdown}). "
+        f"\n{logged} comparisons logged in total{used} ({breakdown}). "
         "Score is average log-strength: 0 = about average, higher = more emotional."
     )
 
@@ -586,7 +618,7 @@ def run_scores(args):
         "(rule of thumb: >0.7 reliable, >0.9 diminishing returns)"
     )
 
-    errors = bootstrap_errors(excerpts, comparisons, n_boot=25)
+    errors = bootstrap_errors(excerpts, comparisons, n_boot=100)
     summary = bootstrap_summary(errors)
     print(
         f"95% of items have error below {summary['p95_error']:.2f} (log-strength units); "
@@ -599,99 +631,111 @@ def run_scores(args):
     with open(filename, "wb") as f:
         pickle.dump(source_scores, f)
 
-    if args.colname:
-        df = pd.read_parquet(args.corpus)
-        df.loc[list(source_scores.keys()), args.colname] = [
-            val for val, _ in source_scores.values()
-        ]
-        df.loc[list(source_scores.keys()), args.colname + "_error"] = [
-            err for _, err in source_scores.values()
-        ]
-        df.to_parquet(args.corpus)
+    df = pd.read_parquet(args.corpus)
+    df.loc[list(source_scores.keys()), args.colname] = [
+        val for val, _ in source_scores.values()
+    ]
+    df.loc[list(source_scores.keys()), args.colname + "_error"] = [
+        err for _, err in source_scores.values()
+    ]
+    # written under another name first, so that a crash can't leave a
+    # half-written corpus file behind
+    tmp = Path(f"{args.corpus}.tmp")
+    df.to_parquet(tmp)
+    os.replace(tmp, args.corpus)
 
 
 def run_reset(args):
-    log_path = output_path(args, "comparisons.jsonl")
-    if not log_path.exists():
+    paths = [
+        p
+        for p in (
+            output_path(args, "comparisons.jsonl"),
+            output_path(args, "config.json"),
+        )
+        if p.exists()
+    ]
+    if not paths:
         print("No comparisons log to remove.")
         return
-    if input(f"Delete {log_path}? [y/N] ").strip().lower() in ("y", "yes"):
-        log_path.unlink()
+    names = " and ".join(str(p) for p in paths)
+    if input(f"Delete {names}? [y/N] ").strip().lower() in ("y", "yes"):
+        for p in paths:
+            p.unlink()
         print("Removed.")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    parser = configargparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,  # so that a mistyped key in the TOML file is an error, not a guess
+        config_file_parser_class=configargparse.TomlConfigParser(["comparitor"]),
+        args_for_setting_config_path=["-c", "--config"],
     )
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    # shared by every subcommand, since the rater also names the files used
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("corpus", help="parquet file of speeches")
-    common.add_argument(
+    # one parser for every mode, rather than subcommands, because configargparse
+    # doesn't pass config file values on to subcommands; so the same file serves
+    # every mode, and each mode ignores the options it doesn't use
+    parser.add_argument(
+        "mode",
+        choices=["compare", "scores", "reset"],
+        help="compare: judge pairs (human or LLM rater); scores: fit and print the "
+        "scores, and write them to the corpus file; reset: delete a comparisons log",
+    )
+    parser.add_argument("--corpus", required=True, help="parquet file of speeches")
+    parser.add_argument(
+        "--colname",
+        required=True,
+        help="name of the experiment, which names its files and the columns "
+        "(<colname> and <colname>_error) that scores writes to the corpus file",
+    )
+    parser.add_argument(
         "--model",
         required=True,
         choices=["human", *MODELS],
         help="who makes the judgements, which also names the files used: human "
         "(at the terminal), fast (Gemma 4 E4B), balanced (Gemma 4 26B-A4B in FP8) or "
-        "accurate (Qwen3.8-27B in 4-bit)",
+        "accurate (Qwen3.8-Flash-Next in 4-bit, on four GPUs)",
     )
-    common.add_argument(
+    parser.add_argument(
         "--thinking",
         action="store_true",
-        help="enable the LLM's thinking mode (with low effort for accurate); this "
+        help="enable the LLM's thinking mode (with medium effort for accurate); this "
         "also names the files used, so judgements with and without thinking are "
         "kept apart",
     )
-    common.add_argument(
+    parser.add_argument(
         "--prompt",
         required=True,
-        help="file containing the prompt given to an LLM rater; its name, without the "
-        "extension, also names the files used, so the judgements for each prompt are "
-        "kept apart (required for a human rater too, though it is not shown)",
+        help="the prompt given to an LLM rater, as text; the two excerpts are "
+        "appended to it (required for a human rater too, though it is not shown)",
     )
-
-    p = sub.add_parser(
-        "compare",
-        parents=[common],
-        help="run a comparison session (human or LLM rater)",
-    )
-    p.add_argument(
+    parser.add_argument(
         "--nbatch",
         type=int,
         default=500,
-        help="prompts per vLLM batch call (also sets the adaptive-pairing refresh size)",
+        help="compare: pairs drawn per round, and so prompts per vLLM call",
     )
-    p.add_argument(
+    parser.add_argument(
+        "--max-comparisons",
+        type=int,
+        help="compare: stop once the log holds this many comparisons (by default it "
+        "never stops); scores: fit only the first this many, as parallel compare "
+        "processes can overshoot the limit by up to a batch each",
+    )
+    parser.add_argument(
         "--max-errors",
         type=int,
         default=5,
-        help="abort after this many consecutive LLM errors",
+        help="compare: abort after this many consecutive LLM errors",
     )
-    p.set_defaults(func=run_compare)
-
-    p = sub.add_parser(
-        "scores", parents=[common], help="print current per-text emotional scores"
-    )
-    p.add_argument(
-        "--colname",
-        help="also write each speech's score and error to this column and "
-        "<colname>_error of the corpus file",
-    )
-    p.set_defaults(func=run_scores)
-
-    p = sub.add_parser(
-        "reset", parents=[common], help="delete the logged comparisons for a corpus"
-    )
-    p.set_defaults(func=run_reset)
-
     args = parser.parse_args()
 
     if args.model == "human" and args.thinking:
         parser.error("--thinking needs an LLM --model")
+    if args.max_comparisons is not None and args.max_comparisons < 1:
+        parser.error("--max-comparisons must be at least 1")
 
-    args.func(args)
+    {"compare": run_compare, "scores": run_scores, "reset": run_reset}[args.mode](args)
 
 
 if __name__ == "__main__":
