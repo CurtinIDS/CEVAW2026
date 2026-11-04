@@ -1,3 +1,9 @@
+[comparitor]
+corpus = "/mnt/data/cevaw/corpus_1998_to_2025_v8-emotionality-subset.parquet"
+colname = "emotionality_fast_nothinking"
+model = "fast"
+thinking = false
+prompt = """
 ## Your task
 
 You are a text classifier. Your job is to compare two text excerpts, drawn from Australian parliamentary and senate speeches (the "Hansard" data set), and determine which of the texts exhibits more emotionality (or are they tied). These comparisons will later be collated and, using a variant of the Bradley-Terry model, assigned emotionality scores for later comparison.
@@ -84,3 +90,4 @@ members of the Labor Party do not care about the Sunshine Coast.</dt>
 <dd>"...if it says it's so fantastic at creating jobs..": this reads as sarcastic and an attack on the government, and is weakly coded as emotional. "that up as the extraordinarily dishonest statement...": difficult to judge this on its factual nature, but by adding "extraordinarily" this seems to appeal to an emotional response in the listener. Overall, this statement reads as weakly emotional.</dd>
 
 </dl>
+"""
