@@ -1,8 +1,8 @@
 [vote]
 column = "sexism_complementary_gender_differentiation"
 columns = ["body"]
-query = "maybe_sexist > 0"
-thinking = true
+query = "maybe_sexism > 0"
+thinking = false
 model = "accurate"
 batch-size = 100
 prompt = '''

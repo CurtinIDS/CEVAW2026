@@ -1,0 +1,171 @@
+[vote]
+column = "gender_swap_men"
+columns = ["body"]
+thinking = false
+model = "balanced"
+batch-size = 500
+query = "maybe_gendered > 0"
+prompt = '''
+=== TASK: THE GROUP-SWAP TEST ===
+You will read a text from the Australian Parliament's Hansard. It may contain speeches, questions, answers and interjections. Speaker and addressee details have been removed, so judge only the words in the text.
+
+Your job is to decide whether the text contains a statement about men that fails the group-swap test described below. You are not judging whether the text is sexist in general. Only the group-swap test counts.
+
+=== WHO COUNTS AS men ===
+Treat any of the following as references to men:
+
+men, man, boys, boy, gentlemen (as a group), males, male (as a noun or adjective), fathers, dads, husbands, husband, sons, brothers, grandfathers, blokes, lads, "the boys", "real men".
+
+This includes references to men as a whole group and to a subgroup of men, such as an occupation or age group. It also includes a statement about an individual, but only when the speaker links the statement to that person being a man (for example, "as a man, the minister naturally...").
+
+=== WHAT THE GROUP-SWAP TEST IS ===
+For each statement about men, rewrite it in your head with women in place of men. Swap any related words too, such as mothers and fathers, girls and boys, wives and husbands, or she and he. Then compare the two versions.
+
+The test works by exposing double standards. A generalisation about men can sound normal because it is familiar. When the same statement is made about women, the assumption behind it becomes obvious, and the swapped version sounds odd or insulting.
+
+- If the swapped version sounds just as reasonable as the original, the statement PASSES the test.
+- If the swapped version sounds odd or insulting, ask why. If it is because the original relies on a generalisation about men as a group, the statement FAILS the test. If it is only because of biology or a documented fact, the statement PASSES (see "Statements of fact" below).
+
+=== WHEN THE SWAPPED VERSION SOUNDS WRONG ===
+A statement fails the test when it does at least one of these:
+- attributes a nature, temperament, ability, preference or motive to men as a group;
+- assigns men a role, duty or place because of their sex;
+- holds men to a standard that would not be applied to women;
+- praises or criticises men in a way that only makes sense because of a stereotype about their sex.
+
+The swap commonly exposes generalisations such as these:
+
+- men are naturally incompetent at caring, parenting or domestic work;
+- men are naturally violent, predatory or dangerous, or not to be trusted around children;
+- men feel less deeply, or have no need for emotional support or counselling;
+- men should be breadwinners, providers or protectors, and have failed if they are not;
+- men should be tough, stoic or "man enough";
+- men are naturally unruly, disorganised, or unable to concentrate or multitask;
+- men should be the ones to take risks or make sacrifices because they are men;
+- men as a group share particular motives, such as fathers seeking custody to avoid child support.
+
+Polite, affectionate or complimentary statements can fail the test. A positive tone does not make a generalisation acceptable. Hedges such as "on average", "generally" or "let's be honest" do not make it acceptable either.
+
+=== STATEMENTS THAT PASS THE TEST (ANSWER 0) ===
+Some statements may be sexist in other ways but still pass the group-swap test, because the swapped version sounds just as reasonable as the original. Answer 0 for these. Other prompts will check for them separately. They include:
+- denying or minimising discrimination or disadvantage (for example, "the pay gap is just the result of career choices");
+- dismissing complaints, or criticising advocates or campaigners, when the swapped version sounds like ordinary political argument;
+- remarks about an individual's looks, emotions or behaviour that do not link the remark to them being a man.
+
+=== STATEMENTS OF FACT DO NOT COUNT ===
+Do not flag statements that describe biology, documented circumstances or measured outcomes, even if they mention men specifically and even if the swapped version sounds strange. These include:
+- biology, such as pregnancy, childbirth, breastfeeding, menstruation, menopause, and sex-specific cancers and health conditions;
+- documented circumstances, such as rates of violence, victimisation, workplace injury, suicide, homelessness, unemployment or underrepresentation;
+- measured outcomes, such as pay gaps, retirement savings gaps, life expectancy or educational results;
+- the reported experiences of men (for example, "many men tell me they feel unsafe").
+
+The key distinction is circumstance versus essence. "men are more likely to experience X" describes a circumstance and passes. "men are naturally X" or "men need X because of what they are" describes an essence and fails.
+
+However, a fact used to justify a generalisation still fails. Mentioning childbirth is fine. Arguing that because women give birth they belong at home is not.
+
+=== OTHER THINGS THAT DO NOT COUNT ===
+- Policies, programs or funding aimed at men (for example, health screening, support services or scholarships), unless the justification relies on a generalisation about men.
+- Quoting, reporting or criticising someone else's statement. Only flag statements the speaker themselves makes or endorses.
+- Gendered titles and forms of address (for example, Madam Speaker, Mr President, "the honourable member... she"), and ordinary paired phrases such as "mums and dads".
+- Disagreement with a policy, argument or person that does not rest on a generalisation about men.
+
+=== HOW TO DECIDE ===
+1. Find every statement in the text that refers to men, or to an individual because they are a man. Most texts will contain none. If so, the answer is 0.
+2. Apply the swap to each statement.
+3. If the swapped version sounds just as reasonable as the original, the statement passes. Answer 0 for it, even if you think it may be sexist in some other way.
+4. If the swapped version sounds odd or insulting, decide why. It fails only if the reason is a generalisation about men as a group. If the reason is biology or documented fact, it passes.
+5. Check the exclusions above.
+6. Answer 1 if at least one statement clearly fails the test. Answer 0 otherwise.
+
+Statements that fail this test are rare. If you are genuinely unsure, answer 0. A single sentence is enough for a 1, but the overall topic or tone of a text is not.
+
+=== EXAMPLES ===
+
+FAILS THE GROUP-SWAP TEST (ANSWER 1):
+
+"Dads mean well, but let's be honest, most of them couldn't run a household for a week without mum."
+Swap: "Mums mean well, but let's be honest, most of them couldn't run a household for a week without dad." sounds odd.
+Reason: assumes men are domestically incompetent. The hedge does not make it acceptable.
+
+"Boys will be boys; we can't expect them to sit still and concentrate the way girls do."
+Swap: "Girls will be girls; we can't expect them to sit still and concentrate the way boys do." sounds odd.
+Reason: treats behaviour as an inherent trait of boys.
+
+"Men simply don't feel things as deeply, so there is little point aiming mental health campaigns at them."
+Swap: "Women simply don't feel things as deeply..." sounds odd.
+Reason: attributes an inherent emotional deficit to men.
+
+"A bloke who stays home with the kids while his wife works is letting his family down."
+Swap: "A woman who stays home with the kids while her husband works is letting her family down." sounds odd.
+Reason: assigns the breadwinner role based on sex.
+
+"Men are just naturally violent, and no program is going to change that."
+Swap: "Women are just naturally violent..." sounds odd.
+Reason: describes an essence, not a circumstance. Compare the example about rates of family violence, which passes.
+
+"I would be uneasy leaving a male carer alone with small children; it just isn't natural for them."
+Swap: "I would be uneasy leaving a female carer alone with small children..." sounds odd.
+Reason: treats men as inherently unsuited to caring and inherently suspect.
+
+"Most fathers fighting for custody are really just trying to get out of paying child support."
+Swap: "Most mothers fighting for custody are really just trying to get more child support." sounds insulting.
+Reason: attributes a shared motive to men as a group.
+
+"Real men don't need counselling; they just get on with it."
+Swap: "Real women don't need counselling..." sounds odd.
+Reason: holds men to a standard of stoicism that would not be applied to women.
+
+"If the Treasurer were man enough, he would admit the budget has failed."
+Swap: "If the Treasurer were woman enough, she would admit the budget has failed." sounds odd.
+Reason: holds an individual to a sex-based standard of toughness.
+
+"Men are hopeless at multitasking, so of course the minister lost track of the details."
+Swap: "Women are hopeless at multitasking..." sounds insulting.
+Reason: a generalisation about men's abilities, applied to an individual.
+
+PASSES THE GROUP-SWAP TEST, EVEN IF POSSIBLY SEXIST IN OTHER WAYS (ANSWER 0):
+
+"Boys aren't really falling behind at school; any gap just reflects the effort they put in."
+Swap: "Girls aren't really falling behind at school; any gap just reflects the effort they put in." sounds just as reasonable.
+Reason: passes. Dismissing disadvantage is outside this test.
+
+"There is no crisis in men's health; men just need to see their GP more often."
+Swap: "There is no crisis in women's health; women just need to see their GP more often." sounds just as reasonable.
+Reason: passes.
+
+"Men who complain about the Family Court should accept the umpire's decision and move on."
+Swap: "Women who complain about the Family Court should accept the umpire's decision and move on." sounds just as reasonable.
+Reason: passes. Dismissing complaints is outside this test.
+
+"The Treasurer is throwing a tantrum and should grow up."
+Reason: a remark about an individual that does not link his behaviour to him being a man, so there is no group statement to swap.
+
+"The member's comb-over is a bigger disaster than his budget."
+Reason: a remark about an individual's appearance, but it makes no claim about men as a group, so the test does not apply.
+
+NO GENERALISATION, OR A STATEMENT OF FACT (ANSWER 0):
+
+"Men make up the large majority of workplace fatalities, which is why these safety reforms matter."
+Reason: a documented circumstance.
+
+"Men die by suicide at around three times the rate of women, and this program targets that."
+Reason: a measured outcome.
+
+"Men commit the majority of family violence, and this bill funds behaviour-change programs."
+Reason: a documented circumstance, not a claim that men are violent by nature.
+
+"This funding expands prostate cancer screening for men over fifty."
+Reason: a policy aimed at men for a biological reason.
+
+"This scheme encourages fathers to take a greater share of parental leave."
+Reason: a policy aimed at men with no generalisation.
+
+"The member's comment that men are useless at parenting was uncalled for."
+Reason: quoting a statement in order to criticise it.
+
+"Young men in regional areas face higher rates of unemployment."
+Reason: a measured outcome.
+
+"I thank the honourable gentleman for his question, but the answer is no."
+Reason: a form of address only.
+'''

@@ -1,0 +1,193 @@
+[vote]
+column = "maybe_gendered"
+columns = ["body"]
+query = ""
+thinking = false
+model = "balanced"
+prompt = '''
+=== TASK ===
+You will read a text from the Australian Parliament's Hansard. It may
+contain speeches, questions, answers and interjections.
+
+You are a first-pass FILTER. Return a "maybe_gendered" flag:
+- 1 if the text contains ANYTHING about gender, as described below;
+- 0 only if it clearly contains nothing of the kind.
+
+You are NOT deciding whether the text is sexist. A more careful reviewer
+will check every text you flag. Your only job is to make sure no text
+that touches on gender slips through. Missing a text is a much worse
+mistake than flagging one that turns out to be fine. When in doubt,
+answer 1.
+
+Read the WHOLE text, including interjections and quoted remarks. One
+word or phrase anywhere in the text is enough for a 1.
+
+=== ANSWER 1 IF THE TEXT CONTAINS EITHER A OR B ===
+
+A. ANY MENTION OF A GENDERED GROUP, ROLE OR TOPIC
+Answer 1 if the text uses any word for women or men as a group, a
+gendered family or social role, or a gender-related topic. This
+includes, but is not limited to:
+
+- Women and girls: women, woman, girls, girl, ladies, lady, females,
+  female, mothers, mums, wives, wife, daughters, sisters, grandmothers,
+  widows, housewives, "working mums", sheilas, "the girls", "the fairer
+  sex", "the gentler sex", womanhood, feminine.
+- Men and boys: men, man, boys, boy, gentlemen (as a group), males,
+  male, fathers, dads, husbands, husband, sons, brothers, grandfathers,
+  widowers, blokes, lads, "the boys", "real men", "a man's job",
+  manhood, masculine.
+- Gendered roles and topics: gender, sex (as in sex discrimination),
+  sexism, misogyny, chauvinism, feminism, feminists, men's rights,
+  gender equality, gender pay gap, quotas or targets for women,
+  maternity, paternity, pregnancy, childbirth, breadwinner, homemaker,
+  sexual harassment, sexual assault, domestic or family violence.
+
+This applies whether the mention is positive, negative, neutral,
+factual, a statistic, a policy, a joke, or a quote.
+
+B. ANY REMARK ABOUT A PERSON THAT IS LINKED TO THEIR SEX
+Answer 1 if the text comments on a specific person (a member, minister,
+staffer or anyone else) in any of these ways, even if no gendered word
+is used:
+
+- their looks, body, clothes, hair, voice or age;
+- their emotions or temper: hysterical, emotional, shrill, shrieking,
+  screeching, nagging, "calm down", "settle down", "relax", "smile";
+- their marriage, partner, spouse, children, or lack of children;
+- their sexuality, or any sexual remark or innuendo;
+- pet names or belittling forms of address: love, dear, darling,
+  sweetheart, "girls", "boys", "young lady", "young man", "sunshine";
+- telling them where they belong, e.g. "back to the kitchen", "go home
+  to your family";
+- suggesting they are not tough enough, not man enough, or not a real
+  man or real woman.
+
+Also answer 1 for:
+- any interjection that fits A or B (interjections count like any other
+  statement);
+- any remark that is quoted or reported, even if the speaker condemns it;
+- anything you are unsure about.
+
+=== THESE ALONE ARE NOT ENOUGH FOR A 1 ===
+Do not answer 1 ONLY because the text contains:
+- titles and forms of address: Madam Speaker, Mr Speaker, Madam Deputy
+  Speaker, Mr President, Mr Chairman, Ms, Mrs, Mr, "the honourable
+  gentleman", "the honourable lady";
+- pronouns referring to a person: he, she, him, her, his, hers;
+- people's names.
+If the text contains one of these AND anything from A or B, answer 1.
+
+=== ANSWER 0 ONLY WHEN ===
+Nothing in the text fits A or B. For example:
+- the text is procedural or about a topic with no gendered content;
+- people are referred to only by name, title or pronoun, and nothing
+  sex-linked is said about them;
+- the text is empty.
+
+=== WORKED EXAMPLES: ANSWER 1 ===
+Text: "Women working full time still earn on average 12 per cent less
+than men, and this bill is designed to close that gap."
+Answer: 1
+Why: Mentions women and men as groups (A). It may well be fine, but the
+reviewer will decide that.
+
+Text: "Mums and dads across my electorate are struggling with the cost
+of living."
+Answer: 1
+Why: Mentions gendered family roles (A).
+
+Text: "This program funds prostate cancer screening for men over fifty."
+Answer: 1
+Why: Mentions men as a group (A).
+
+Text: "Men make up the vast majority of workplace deaths, and these
+safety reforms matter."
+Answer: 1
+Why: Mentions men as a group (A).
+
+Text: "Under this quota scheme, candidates will be handed seats they
+could never win on merit."
+Answer: 1
+Why: Quotas in this context are a gender-related topic (A).
+
+Text: "We need more women in this chamber, because they bring compassion
+and a spirit of cooperation."
+Answer: 1
+Why: Mentions women as a group (A).
+
+Text: "Dads mean well, but most of them couldn't run a household for a
+week."
+Answer: 1
+Why: Mentions fathers (A).
+
+Text: "Real men don't need counselling; they just get on with it."
+Answer: 1
+Why: Mentions men and "real men" (A).
+
+Text: "The family violence bill expands crisis accommodation in
+regional areas."
+Answer: 1
+Why: Family violence is a gender-related topic (A).
+
+Text: "The member opposite is getting hysterical again. Perhaps someone
+could calm her down."
+Answer: 1
+Why: A remark about a person's emotions (B).
+
+Text: "Perhaps if the member had children of her own, she would
+understand what families go through."
+Answer: 1
+Why: A remark about a person's lack of children (B).
+
+Text: "The minister might win more votes if she did something about
+that outfit."
+Answer: 1
+Why: A remark about a person's clothes (B).
+
+Text: Interjection: "Settle down, sweetheart."
+Answer: 1
+Why: A belittling pet name in an interjection (B).
+
+Text: "The member for Northgate told the minister to 'go back to the
+kitchen'. That remark has no place in this chamber."
+Answer: 1
+Why: A quoted remark telling a person where they belong (B). Flag it
+even though the speaker condemns it.
+
+Text: "If the Treasurer were man enough, he would admit the budget has
+failed."
+Answer: 1
+Why: Suggests a person is not "man enough" (B).
+
+Text: "The minister's voice could strip paint. I'd rather listen to a
+leaf blower than another of her answers."
+Answer: 1
+Why: A remark about a person's voice (B).
+
+=== WORKED EXAMPLES: ANSWER 0 ===
+Text: "The committee will now consider clause 14 of the Customs
+Amendment Bill."
+Answer: 0
+Why: Procedural; nothing gendered.
+
+Text: "Madam Speaker, I thank the minister for her answer, but the
+figures she quoted are out of date."
+Answer: 0
+Why: Only a title and pronouns. Nothing sex-linked is said about her.
+
+Text: "The minister has botched this rollout from start to finish and
+should resign. He has lost the confidence of the sector."
+Answer: 0
+Why: Criticism of his work, with only pronouns.
+
+Text: "I oppose these childcare subsidies because the cost to the
+budget is unjustified, and families deserve better targeted support."
+Answer: 0
+Why: Families and childcare are not gendered words on their own, and
+nothing gendered is said.
+
+Text: "Mr Chairman, I move that the amendment be agreed to."
+Answer: 0
+Why: Only a title.
+'''
