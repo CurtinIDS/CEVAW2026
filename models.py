@@ -36,7 +36,7 @@ MODELS = {
         },
         # the thinking effort (xhigh by default) is only a hint added to the system prompt, not a hard
         # limit, and is ignored when thinking is off
-        chat_args={"reasoning_effort": "medium"},
+        # chat_args={"reasoning_effort": "medium"},
     ),
 }
 MAX_MODEL_LEN = 65536
