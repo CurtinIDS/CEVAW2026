@@ -6,243 +6,190 @@ model = "balanced"
 batch-size = 500
 query = "maybe_gendered > 0"
 prompt = '''
-TASK: THE GROUP-SWAP TEST
+=== TASK: THE GROUP-SWAP TEST ===
+You will read a text from the Australian Parliament's Hansard. It may contain speeches, questions, answers and interjections. Speaker and addressee details have been removed, so judge only the words in the text.
 
-You will read a speech from the Australian Parliament (Hansard). Your job is to decide whether the speech contains sexism directed at women, using the group-swap test described below. Speaker and addressee details have been removed; judge only the words in the text.
+Your job is to decide whether the text contains a statement about women that fails the group-swap test described below. You are not judging whether the text is sexist in general. Only the group-swap test counts.
 
-WHO COUNTS AS WOMEN
+=== WHO COUNTS AS women ===
+Treat any of the following as references to women:
 
-Treat any of the following as references to women: women, woman, girls, girl, females, female (as a noun or adjective), ladies, lady, mothers, mums, wives, daughters, sisters, grandmothers, housewives, "working mums", "the girls", "the fairer sex", sheilas, and references to individuals as "she/her" where the statement turns on her being a woman.
+women, woman, girls, girl, ladies, lady, females, female (as a noun or adjective), mothers, mums, wives, wife, daughters, sisters, grandmothers, housewives, "working mums", sheilas, "the girls", "the fairer sex", "the gentler sex".
 
-This includes references to women as a whole group, to a subgroup of women (e.g. a particular occupation, age group, or political group made up of women), and to an individual when the speaker attributes something to that person because of their sex.
+This includes references to women as a whole group and to a subgroup of women, such as an occupation or age group. It also includes a statement about an individual, but only when the speaker links the statement to that person being a woman (for example, "as a woman, the minister naturally...").
 
-WHAT THE GROUP-SWAP TEST IS
+=== WHAT THE GROUP-SWAP TEST IS ===
+For each statement about women, rewrite it in your head with men in place of women. Swap any related words too, such as mothers and fathers, girls and boys, wives and husbands, or she and he. Then compare the two versions.
 
-For each statement about women, mentally rewrite it with men in place of women (and swap any related words, such as mothers/fathers, girls/boys, she/he). Then compare the two versions.
+The test works by exposing double standards. A generalisation about women can sound normal because it is familiar. When the same statement is made about men, the assumption behind it becomes obvious, and the swapped version sounds odd or insulting.
 
-If the swapped version sounds odd, patronising, insulting, or absurd, ask WHY it sounds that way:
+- If the swapped version sounds just as reasonable as the original, the statement PASSES the test.
+- If the swapped version sounds odd or insulting, ask why. If it is because the original relies on a generalisation about women as a group, the statement FAILS the test. If it is only because of biology or a documented fact, the statement PASSES (see "Statements of fact" below).
 
-- If it sounds odd because the original relies on an assumption about the nature, abilities, temperament, motives, worth, or proper role of women as a group, the original is likely sexist.
-- If it sounds odd only because of biology or a documented fact about circumstances, the original is NOT sexist (see "Statements of fact" below).
+=== WHEN THE SWAPPED VERSION SOUNDS WRONG ===
+A statement fails the test when it does at least one of these:
+- attributes a nature, temperament, ability, preference or motive to women as a group;
+- assigns women a role, duty or place because of their sex;
+- holds women to a standard that would not be applied to men;
+- praises or criticises women in a way that only makes sense because of a stereotype about their sex.
 
-If the swapped version sounds just as reasonable as the original, the original passes the test.
+The swap commonly exposes generalisations such as these:
 
-SCOPE: ONLY THE GROUP-SWAP TEST COUNTS
+- women are naturally more caring, nurturing, gentle, compassionate, moral or emotional than men;
+- women are less capable, rational or qualified, or owe their positions to targets or quotas rather than merit;
+- women naturally suit particular roles, such as caring for children or home duties, or naturally avoid others, such as engineering, leadership or finance;
+- women need protection, provision or guidance from men;
+- women are valued for their appearance or as decoration rather than for their work;
+- women have particular interests or tastes, such as fashion or décor, because they are women;
+- women as a group share particular motives, such as using relationships to gain advantage.
 
-Answer 1 ONLY when a statement fails the group-swap test. Some statements may be sexist in other ways but still pass the test, because the swapped version sounds just as reasonable as the original. Answer 0 for these.
+Polite, affectionate or complimentary statements can fail the test. A positive tone does not make a generalisation acceptable. Hedges such as "on average", "generally" or "let's be honest" do not make it acceptable either.
 
-Other prompts will check for them separately. Statements that pass the test include:
+=== STATEMENTS THAT PASS THE TEST (ANSWER 0) ===
+Some statements may be sexist in other ways but still pass the group-swap test, because the swapped version sounds just as reasonable as the original. Answer 0 for these. Other prompts will check for them separately. They include:
+- denying or minimising discrimination or disadvantage (for example, "the pay gap is just the result of career choices");
+- dismissing complaints, or criticising advocates or campaigners, when the swapped version sounds like ordinary political argument;
+- remarks about an individual's looks, emotions or behaviour that do not link the remark to them being a woman.
 
-- denying or minimising discrimination (e.g. "the pay gap is just the result of choices");
-- dismissing complaints or criticising advocates, when the swapped version sounds like ordinary political argument;
-- remarks about an individual's looks, emotions or behaviour that do not attribute anything to their sex. The test only applies to an individual when the speaker links the remark to them being a {TARGET_SINGULAR} (e.g. "as a {TARGET_SINGULAR}, she/he naturally...").
+=== STATEMENTS OF FACT DO NOT COUNT ===
+Do not flag statements that describe biology, documented circumstances or measured outcomes, even if they mention women specifically and even if the swapped version sounds strange. These include:
+- biology, such as pregnancy, childbirth, breastfeeding, menstruation, menopause, and sex-specific cancers and health conditions;
+- documented circumstances, such as rates of violence, victimisation, workplace injury, suicide, homelessness, unemployment or underrepresentation;
+- measured outcomes, such as pay gaps, retirement savings gaps, life expectancy or educational results;
+- the reported experiences of women (for example, "many women tell me they feel unsafe").
 
-WHAT "ODD" OR "INSULTING" LOOKS LIKE
+The key distinction is circumstance versus essence. "women are more likely to experience X" describes a circumstance and passes. "women are naturally X" or "women need X because of what they are" describes an essence and fails.
 
-The swapped version will typically sound wrong in one of these ways. The original statement:
+However, a fact used to justify a generalisation still fails. Mentioning childbirth is fine. Arguing that because women give birth they belong at home is not.
 
-- implies women are less competent, rational, qualified, or serious;
-- implies women got positions or benefits through favour rather than merit;
-- treats women as naturally suited to particular roles (e.g. caring, providing, domestic work, manual work) when nothing in the policy requires it;
-- reduces women to appearance, sexuality, or relationships;
-- portrays women as needing protection, supervision, or guidance from men;
-- praises women only for warmth, morality, gentleness, or toughness in a way that substitutes for judging them on competence;
-- treats women as all alike, or sorts them into "good" and "bad" types;
-- attributes hidden motives to women (e.g. seeking special favours, power, or advantage);
-- trivialises or dismisses concerns raised by women as oversensitivity or exaggeration;
-- treats women's presence or interests as a novelty or a distraction.
+=== OTHER THINGS THAT DO NOT COUNT ===
+- Policies, programs or funding aimed at women (for example, health screening, support services or scholarships), unless the justification relies on a generalisation about women.
+- Quoting, reporting or criticising someone else's statement. Only flag statements the speaker themselves makes or endorses.
+- Gendered titles and forms of address (for example, Madam Speaker, Mr President, "the honourable member... she"), and ordinary paired phrases such as "mums and dads".
+- Disagreement with a policy, argument or person that does not rest on a generalisation about women.
 
-A statement can be sexist even when it is polite, affectionate, or complimentary. Do not treat a positive tone as evidence that a statement is acceptable.
-
-STATEMENTS OF FACT DO NOT COUNT
-
-Do not flag statements that describe biology, documented circumstances, or measured outcomes, even if they mention women specifically and even if the swapped version sounds strange. Examples of what counts as fact:
-
-- biology: pregnancy, childbirth, breastfeeding, menstruation, menopause, sex-specific cancers and health conditions;
-- documented circumstances: rates of violence, victimisation, workplace injury, suicide, homelessness, unemployment, or underrepresentation;
-- measured outcomes: pay gaps, retirement savings gaps, life expectancy, educational results;
-- the reported experiences of women (e.g. "many women tell me they feel unsafe").
-
-The key distinction is CIRCUMSTANCE versus ESSENCE. "women are more likely to experience X" describes circumstance. "women are naturally X" or "women need X because of what they are" describes essence. However, a fact USED TO JUSTIFY a stereotyped conclusion still counts as sexist. For example, mentioning childbirth is fine; arguing that because women give birth they belong at home is not. Hedging does not turn a stereotype into a fact. "On average", "generally", or "let's be honest" in front of a claim about inherent character, ability, or temperament does not exempt it.
-
-OTHER THINGS THAT DO NOT COUNT
-
-- Policies, programs, or funding aimed at women (e.g. health screening, support services, scholarships), unless the justification relies on a stereotype.
-- Quoting, reporting, or criticising someone else's sexist remark. Only flag sexism the speaker themselves expresses or endorses.
-- Gendered titles and forms of address (e.g. Madam Speaker, Mr President, "the honourable member... she"), and ordinary paired phrases such as "mums and dads".
-- Disagreement with a policy, argument, or person that does not rest on an assumption about women as a group.
-- Arguments that only mention gender because the topic is gender (e.g. a debate about gender equality legislation), unless the argument itself relies on a stereotype.
-- Other examples of sexism that do not meet the group swap test.
-
-HOW TO DECIDE
-
-1. Find every statement in the speech that refers to {TARGET}, or to an individual because of their sex. Most speeches will contain none; if so, the answer is 0.
+=== HOW TO DECIDE ===
+1. Find every statement in the text that refers to women, or to an individual because they are a woman. Most texts will contain none. If so, the answer is 0.
 2. Apply the swap to each statement.
 3. If the swapped version sounds just as reasonable as the original, the statement passes. Answer 0 for it, even if you think it may be sexist in some other way.
-4. If the swapped version sounds odd or insulting, decide why. Answer 1 only if it is because of a stereotype or assumption about {TARGET} as a group. If it is because of biology or documented fact, answer 0.
+4. If the swapped version sounds odd or insulting, decide why. It fails only if the reason is a generalisation about women as a group. If the reason is biology or documented fact, it passes.
 5. Check the exclusions above.
-6. Answer 1 if at least one statement clearly fails the test. Answer 0 otherwise. If you are genuinely unsure, answer 0.
+6. Answer 1 if at least one statement clearly fails the test. Answer 0 otherwise.
 
-Sexism of this kind is rare. If you are genuinely unsure, answer 0. A single sentence is enough for a 1, but the overall topic or tone of a speech is not.
+Statements that fail this test are rare. If you are genuinely unsure, answer 0. A single sentence is enough for a 1, but the overall topic or tone of a text is not.
 
-EXAMPLES
+=== EXAMPLES ===
 
-FAILS THE GROUP-SWAP TEST (answer 1):
+FAILS THE GROUP-SWAP TEST (ANSWER 1):
 
-"We need more women on our boards, because they bring a nurturing,
-consensus-building style that the boardroom is missing."
-Swap: "We need more men on our boards, because they bring a nurturing,
-consensus-building style..." sounds odd.
-Reason: attributes an innate temperament to women; praise for warmth
-stands in for competence.
+"We need more women on our boards, because they bring a nurturing, consensus-building style that the boardroom is missing."
+Swap: "We need more men on our boards, because they bring a nurturing, consensus-building style..." sounds odd.
+Reason: attributes an innate temperament to women. Praise for warmth stands in for competence.
 
-"We should be careful about promoting women just to meet a target when
-the best candidate might be overlooked."
-Swap: "We should be careful about promoting men just to meet a target..."
-sounds odd.
+"We should be careful about promoting women just to meet a target when the best candidate might be overlooked."
+Swap: "We should be careful about promoting men just to meet a target..." sounds odd.
 Reason: assumes women selected under targets are not the best candidates.
 
-"Girls just aren't drawn to engineering, and no amount of funding will
-change their nature."
-Swap: "Boys just aren't drawn to engineering, and no amount of funding
-will change their nature." sounds odd.
+"Girls just aren't drawn to engineering, and no amount of funding will change their nature."
+Swap: "Boys just aren't drawn to engineering, and no amount of funding will change their nature." sounds odd.
 Reason: treats a career preference as an inherent trait of girls.
 
-"A woman's place is with her children, and this policy finally
-recognises that."
+"A woman's place is with her children, and this policy finally recognises that."
 Swap: "A man's place is with his children..." sounds odd.
-Reason: prescribes a role based on sex.
+Reason: assigns a role based on sex.
 
-"This package means mums can finally afford to go back to work
-part-time."
-Swap: "This package means dads can finally afford to go back to work
-part-time." sounds odd.
-Reason: assumes childcare is the mother's job when the policy applies to
-all parents.
+"This package means mums can finally afford to go back to work part-time."
+Swap: "This package means dads can finally afford to go back to work part-time." sounds odd.
+Reason: assumes childcare is the mother's job when the policy applies to all parents.
 
-"Women are the moral backbone of our communities, and this bill honours
-that."
+"Women are the moral backbone of our communities, and this bill honours that."
 Swap: "Men are the moral backbone of our communities..." sounds odd.
-Reason: benevolent stereotype of inherent moral superiority.
+Reason: attributes inherent moral superiority to women.
 
-"Every woman needs a man she can turn to in hard times, and this law
-helps husbands and fathers fulfil that role."
-Swap: "Every man needs a woman he can turn to in hard times, and this law
-helps wives and mothers fulfil that role." sounds odd.
+"Every woman needs a man she can turn to in hard times, and this law helps husbands and fathers fulfil that role."
+Swap: "Every man needs a woman he can turn to in hard times, and this law helps wives and mothers fulfil that role." sounds odd.
 Reason: portrays women as needing male protection.
 
-"Women give birth, which is why they are naturally suited to staying
-home while their husbands provide."
-Swap: "Men father children, which is why they are naturally suited to
-staying home while their wives provide." sounds odd.
-Reason: a fact is used to justify a role prescription.
+"Women give birth, which is why they are naturally suited to staying home while their husbands provide."
+Swap: "Men father children, which is why they are naturally suited to staying home while their wives provide." sounds odd.
+Reason: a fact is used to justify assigning a role.
 
-"This is a hard economic question that won't be settled by sentiment,
-as some of the women opposite seem to think."
+"This is a hard economic question that won't be settled by sentiment, as some of the women opposite seem to think."
 Swap: "...as some of the men opposite seem to think." sounds odd.
 Reason: implies women reason emotionally.
 
-"The ladies in the gallery will no doubt be more interested in the new
-colour scheme than the budget figures."
-Swap: "The gentlemen in the gallery will no doubt be more interested in
-the new colour scheme..." sounds odd.
-Reason: trivialises women's interests.
+"The ladies in the gallery will no doubt be more interested in the new colour scheme than the budget figures."
+Swap: "The gentlemen in the gallery will no doubt be more interested in the new colour scheme..." sounds odd.
+Reason: attributes particular interests to women because they are women.
 
-"As a woman, the minister naturally finds these budget figures
-confusing."
-Swap: "As a man, the minister naturally finds these budget figures
-confusing." sounds odd.
-Reason: attributes a lack of ability to an individual because of her sex.
+"As a woman, the minister naturally finds these budget figures confusing."
+Swap: "As a man, the minister naturally finds these budget figures confusing." sounds odd.
+Reason: attributes a lack of ability to an individual because she is a woman.
 
-"The new female members are a welcome addition; they certainly brighten
-up the chamber."
-Swap: "The new male members... certainly brighten up the chamber."
-sounds odd.
-Reason: values women for appearance or decoration rather than their work.
+"The new female members are a welcome addition; they certainly brighten up the chamber."
+Swap: "The new male members are a welcome addition; they certainly brighten up the chamber." sounds odd.
+Reason: values women for their appearance rather than their work.
 
-PASSES THE GROUP-SWAP TEST, EVEN IF POSSIBLY SEXIST IN OTHER WAYS
-(answer 0):
+PASSES THE GROUP-SWAP TEST, EVEN IF POSSIBLY SEXIST IN OTHER WAYS (ANSWER 0):
 
 "Women choose lower-paid careers, so the pay gap is not discrimination."
-Swap: "Men choose higher-paid careers, so the pay gap is not
-discrimination." sounds just as reasonable.
-Reason: passes. It may deny discrimination, but that is outside this
-test.
+Swap: "Men choose higher-paid careers, so the pay gap is not discrimination." sounds just as reasonable.
+Reason: passes. It may deny discrimination, but that is outside this test.
 
-"Discrimination against women in hiring ended decades ago; this bill
-solves a problem that no longer exists."
-Swap: "Discrimination against men in hiring ended decades ago..." sounds
-just as reasonable.
+"Discrimination against women in hiring ended decades ago; this bill solves a problem that no longer exists."
+Swap: "Discrimination against men in hiring ended decades ago..." sounds just as reasonable.
 Reason: passes. Denial of discrimination is outside this test.
 
-"Women already have every opportunity men have; it is up to them to
-take it."
-Swap: "Men already have every opportunity women have; it is up to them
-to take it." sounds just as reasonable.
+"Women already have every opportunity men have; it is up to them to take it."
+Swap: "Men already have every opportunity women have; it is up to them to take it." sounds just as reasonable.
 Reason: passes.
 
 "A handful of angry feminists do not speak for ordinary mums."
-Swap: "A handful of angry men's rights activists do not speak for
-ordinary dads." sounds like ordinary political argument.
+Swap: "A handful of angry men's rights activists do not speak for ordinary dads." sounds like ordinary political argument.
 Reason: passes. Criticism of advocates is outside this test.
 
-"The women who succeed in this building don't go running to the media
-every time someone makes a joke."
-Swap: "The men who succeed in this building don't go running to the
-media..." sounds like ordinary political talk.
+"The women who succeed in this building don't go running to the media every time someone makes a joke."
+Swap: "The men who succeed in this building don't go running to the media every time someone makes a joke." sounds like ordinary political talk.
 Reason: passes. Dismissing complaints is outside this test.
 
 "The minister should get her emotions under control before she answers."
-Reason: a remark about an individual that does not link her emotions to
-her being a woman. No group statement to swap. Compare "As a woman, the
-minister naturally finds these figures confusing", which does fail.
+Reason: a remark about an individual that does not link her emotions to her being a woman, so there is no group statement to swap. Compare "As a woman, the minister naturally finds these budget figures confusing", which fails.
 
 "The minister might win more votes if she wore a shorter skirt."
-Reason: a crude remark about an individual, but it makes no claim about
-women as a group. The test does not apply. Other prompts check for this.
+Reason: a crude remark about an individual, but it makes no claim about women as a group, so the test does not apply.
 
-NO STEREOTYPE OR STATEMENT OF FACT (answer 0):
+NO GENERALISATION, OR A STATEMENT OF FACT (ANSWER 0):
 
-"Women are far more likely than men to experience violence from an
-intimate partner, and this funding expands crisis accommodation."
-Reason: documented circumstance, not a claim about women's nature.
+"Women are far more likely than men to experience violence from an intimate partner, and this funding expands crisis accommodation."
+Reason: a documented circumstance, not a claim about women's nature.
 
-"Many women in my electorate tell me they do not feel safe walking home
-at night, and the lighting upgrades in this bill respond to that."
+"Many women in my electorate tell me they do not feel safe walking home at night, and the lighting upgrades in this bill respond to that."
 Reason: reported experience and a factual safety concern.
 
-"Only women can give birth, so paid parental leave must include time for
-physical recovery."
-Reason: biology, used for a factual policy point with no role
-prescription.
+"Only women can give birth, so paid parental leave must include time for physical recovery."
+Reason: biology, used for a factual policy point without assigning a role.
 
-"Menopause affects many women in the workforce, and employers should
-consider flexible arrangements."
-Reason: swapping makes it biologically meaningless, not insulting.
+"Menopause affects many women in the workforce, and employers should consider flexible arrangements."
+Reason: the swap makes it biologically meaningless, not insulting.
 
-"The gender pay gap persists, and this bill requires large employers to
-publish their figures."
-Reason: measured outcome.
+"The gender pay gap persists, and this bill requires large employers to publish their figures."
+Reason: a measured outcome.
 
-"Women remain underrepresented in this chamber, and that affects how our
-debates are conducted."
-Reason: documented fact.
+"Women remain underrepresented in this chamber, and that affects how our debates are conducted."
+Reason: a documented fact.
 
 "This program funds breast screening for women over fifty."
-Reason: policy aimed at women for a biological reason.
+Reason: a policy aimed at women for a biological reason.
 
-"The member's claim that women belong in the kitchen was disgraceful,
-and he should withdraw it."
-Reason: quoting sexism to condemn it.
+"The member's claim that women belong in the kitchen was disgraceful, and he should withdraw it."
+Reason: quoting a statement in order to condemn it.
 
 "Mums and dads across the electorate are feeling the cost of living."
-Reason: ordinary paired phrase; no stereotype.
+Reason: an ordinary paired phrase with no generalisation.
 
-"Madam Deputy Speaker, I thank the minister for her answer, but I
-disagree with her conclusions on the budget."
-Reason: title and pronouns only; disagreement is about the policy.
+"Madam Deputy Speaker, I thank the minister for her answer, but I disagree with her conclusions on the budget."
+Reason: a title and pronouns only. The disagreement is about the policy.
 
-"I oppose these childcare subsidies because the cost to the budget is
-unjustified."
-Reason: policy disagreement with no assumption about women.
+"I oppose these childcare subsidies because the cost to the budget is unjustified."
+Reason: policy disagreement with no generalisation about women.
 '''
